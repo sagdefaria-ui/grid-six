@@ -1,0 +1,8 @@
+{
+  "appId": "com.gridsix.airsoft",
+  "appName": "Grid Six",
+  "webDir": ".",
+  "ios": {
+    "contentInset": "always"
+  }
+}
