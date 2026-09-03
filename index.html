@@ -510,7 +510,7 @@ function setHeading(deg){
   youHeading = raw;
   if(!youConeEl) refreshYouConeRef(); else applyHeading();
   var btn = document.getElementById('compass-btn');
-  if(btn.classList.contains('on')) btn.textContent = Math.round(raw) + '°';
+  if(btn.classList.contains('on')) btn.textContent = Math.round(raw) + '° [' + (window.__debugAngle||'') + ']';
 }
 
 var youMarker = L.marker([you.lat, you.lng], { icon: iconYou(callsignEl().value) }).addTo(map);
@@ -658,18 +658,20 @@ if(navigator.geolocation){
 
 // ---------- bússola ----------
 function screenAngle(){
-  if(typeof window.orientation === 'number') return window.orientation;
   if(window.screen && window.screen.orientation && typeof window.screen.orientation.angle === 'number') return window.screen.orientation.angle;
+  if(typeof window.orientation === 'number') return window.orientation;
   return 0;
 }
 function handleOrientation(e){
-  var heading;
+  var rawSensor;
   if(typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)){
-    heading = e.webkitCompassHeading - screenAngle();
+    rawSensor = e.webkitCompassHeading;
   } else if(e.alpha != null){
-    heading = 360 - e.alpha - screenAngle();
+    rawSensor = 360 - e.alpha;
   } else { return; }
-  setHeading(heading);
+  var ang = screenAngle();
+  window.__debugAngle = 'raw:' + Math.round(rawSensor) + ' scr:' + ang;
+  setHeading(rawSensor - ang);
 }
 document.getElementById('compass-btn').addEventListener('click', function(){
   var btn = this;
