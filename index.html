@@ -657,12 +657,17 @@ if(navigator.geolocation){
 }
 
 // ---------- bússola ----------
+function screenAngle(){
+  if(typeof window.orientation === 'number') return window.orientation;
+  if(window.screen && window.screen.orientation && typeof window.screen.orientation.angle === 'number') return window.screen.orientation.angle;
+  return 0;
+}
 function handleOrientation(e){
   var heading;
   if(typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)){
-    heading = e.webkitCompassHeading;
+    heading = e.webkitCompassHeading - screenAngle();
   } else if(e.alpha != null){
-    heading = 360 - e.alpha;
+    heading = 360 - e.alpha - screenAngle();
   } else { return; }
   setHeading(heading);
 }
