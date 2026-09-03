@@ -1,0 +1,16 @@
+{
+  "name": "grid-six",
+  "version": "1.0.0",
+  "description": "Grid Six - rastreador tatico para airsoft",
+  "scripts": {
+    "sync": "cap sync"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/ios": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/assets": "^3.0.0"
+  }
+}
