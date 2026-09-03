@@ -392,6 +392,24 @@
   </div>
 </div>
 
+<div id="account-modal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-title">Configurações da conta</div>
+    <div class="modal-label" style="margin-top:0">Nome de operador</div>
+    <input id="acct-name" class="modal-input" placeholder="Seu nome">
+    <div class="modal-label">Nova senha</div>
+    <input id="acct-pass1" class="modal-input" type="password" placeholder="Nova senha (mín. 6 caracteres)">
+    <input id="acct-pass2" class="modal-input" type="password" placeholder="Confirmar nova senha">
+    <div id="acct-error" style="font-size:12px; min-height:16px; color:var(--danger);"></div>
+    <div class="modal-actions">
+      <button id="acct-save-name" style="background:var(--you); color:#062033;">Salvar nome</button>
+      <button id="acct-save-pass" style="background:var(--squad); color:#3A2506;">Alterar senha</button>
+    </div>
+    <button id="acct-logout" style="width:100%; margin-top:10px; background:none; border:none; color:var(--danger); font-size:12px;">Sair da conta</button>
+    <button id="account-close" style="width:100%; margin-top:6px; background:none; border:0.5px solid var(--border); color:var(--text-secondary); border-radius:8px; padding:9px; font-size:12px;">Fechar</button>
+  </div>
+</div>
+
 <div id="wp-modal" class="modal-overlay">
   <div class="modal-card">
     <div class="modal-title">Novo ponto</div>
@@ -1337,11 +1355,42 @@ function onAuthSuccess(sess, profile){
 function renderAccountFooter(){
   var el = document.getElementById('account-footer');
   if(!session){ el.innerHTML = ''; return; }
-  el.innerHTML = '<button id="logout-btn">Sair da conta</button>';
-  document.getElementById('logout-btn').addEventListener('click', function(){
-    sb.auth.signOut().then(function(){ location.reload(); });
-  });
+  el.innerHTML = '<button id="account-open">⚙️ Configurações da conta</button>';
+  document.getElementById('account-open').addEventListener('click', openAccountModal);
 }
+function openAccountModal(){
+  document.getElementById('acct-name').value = (myProfile && myProfile.callsign) || callsignEl().value;
+  document.getElementById('acct-pass1').value = '';
+  document.getElementById('acct-pass2').value = '';
+  var err = document.getElementById('acct-error'); err.textContent = ''; err.style.color = 'var(--danger)';
+  document.getElementById('account-modal').style.display = 'flex';
+}
+document.getElementById('account-close').addEventListener('click', function(){
+  document.getElementById('account-modal').style.display = 'none';
+});
+document.getElementById('acct-save-name').addEventListener('click', function(){
+  var name = document.getElementById('acct-name').value.trim();
+  if(!name) return;
+  callsignEl().value = name;
+  callsignEl().dispatchEvent(new Event('input'));
+  if(myProfile) myProfile.callsign = name;
+  document.getElementById('account-modal').style.display = 'none';
+});
+document.getElementById('acct-save-pass').addEventListener('click', function(){
+  var p1 = document.getElementById('acct-pass1').value;
+  var p2 = document.getElementById('acct-pass2').value;
+  var err = document.getElementById('acct-error'); err.style.color = 'var(--danger)';
+  if(!p1 || p1.length < 6){ err.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+  if(p1 !== p2){ err.textContent = 'As senhas não coincidem.'; return; }
+  sb.auth.updateUser({ password:p1 }).then(function(res){
+    if(res.error){ err.textContent = res.error.message; return; }
+    err.style.color = 'var(--ok)'; err.textContent = 'Senha alterada com sucesso!';
+    document.getElementById('acct-pass1').value = ''; document.getElementById('acct-pass2').value = '';
+  });
+});
+document.getElementById('acct-logout').addEventListener('click', function(){
+  sb.auth.signOut().then(function(){ location.reload(); });
+});
 
 // ---------- amigos ----------
 function loadFriends(){
