@@ -230,18 +230,6 @@
   }
   #invite-bar button{background:var(--squad); color:#3A2506; border:none; border-radius:8px; padding:0 14px; font-weight:600; font-size:13px;}
   #party-hint{padding:0 14px 12px; font-size:10.5px; color:var(--text-muted); flex-shrink:0;}
-  #team-controls{padding:0 14px 12px; flex-shrink:0; border-bottom:0.5px solid var(--border);}
-  #team-buttons .tab{padding:7px 11px;}
-  #team-buttons .tab.active{background:var(--you); border-color:var(--you); color:#062033;}
-  #admin-label{display:flex; align-items:center; gap:8px; margin-top:10px; font-size:12.5px; color:var(--text-secondary);}
-  #admin-reveal{display:none; padding:10px 14px 12px; flex-shrink:0; border-bottom:0.5px solid var(--border);}
-  .reveal-row{display:flex; align-items:center; gap:8px; padding:6px 0; flex-wrap:wrap;}
-  .reveal-row .rlabel{font-size:12.5px; font-weight:500; width:52px; flex-shrink:0;}
-  .reveal-row button{
-    font-family:var(--sans); font-size:11px; color:var(--text-secondary); background:var(--panel-2);
-    border:0.5px solid var(--border); border-radius:6px; padding:6px 9px;
-  }
-  .reveal-row .rstatus{font-family:var(--mono); font-size:10.5px; color:var(--ok);}
 
   /* Modal de novo ponto */
   .modal-overlay{position:fixed; inset:0; z-index:900; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; padding:20px;}
@@ -329,24 +317,6 @@
       <button id="party-copy">Copiar</button>
     </div>
 
-    <div id="team-controls">
-      <div class="modal-label" style="margin-top:0">Seu time</div>
-      <div class="chip-row" id="team-buttons">
-        <button type="button" class="tab" data-team="A">Time A</button>
-        <button type="button" class="tab" data-team="B">Time B</button>
-        <button type="button" class="tab" data-team="">Sem time</button>
-      </div>
-      <label id="admin-label">
-        <input type="checkbox" id="admin-toggle"> Sou administrador da party
-      </label>
-    </div>
-
-    <div id="admin-reveal">
-      <div class="modal-label" style="margin-top:0">Revelar posição de um time pro resto da party</div>
-      <div id="reveal-a" class="reveal-row"></div>
-      <div id="reveal-b" class="reveal-row"></div>
-    </div>
-
     <div id="party-list"></div>
     <div id="invite-bar" style="flex-direction:column">
       <input id="join-name-input" placeholder="Seu nome (ex: Falcão)">
@@ -418,10 +388,6 @@ var savedName = localStorage.getItem('gridsix-callsign');
 if(!savedName){ savedName = 'OP-' + Math.floor(100 + Math.random()*900); localStorage.setItem('gridsix-callsign', savedName); }
 document.getElementById('callsign').value = savedName;
 
-var myTeam = localStorage.getItem('gridsix-team') || '';
-var amAdmin = localStorage.getItem('gridsix-admin') === '1';
-var activeReveals = {}; // 'A'|'B' -> timestamp (ms) de quando expira
-
 // ---------- estado ----------
 var fmt = 'gps'; // 'gps' | 'mgrs'
 var you = { lat: -23.5505, lng: -46.6333, hasFix:false };
@@ -451,28 +417,6 @@ function metersToDeg(dx, dy, atLat){
   var dlng = dx / (111320 * Math.cos(atLat * Math.PI/180));
   return { dlat:dlat, dlng:dlng };
 }
-
-// ---------- visibilidade por time ----------
-function canSeeTeammate(row){
-  if(amAdmin) return true;
-  if(!row.team || !myTeam) return true; // ninguém configurou times ainda: comportamento padrão (todo mundo vê todo mundo)
-  if(row.team === myTeam) return true;
-  var exp = activeReveals[row.team];
-  return !!(exp && exp > Date.now());
-}
-function refreshTeamVisibility(){
-  Object.keys(squad).forEach(function(id){
-    var row = squad[id];
-    var m = squadMarkers[id];
-    if(!m) return;
-    var visible = canSeeTeammate(row);
-    if(visible && !map.hasLayer(m)) m.addTo(map);
-    else if(!visible && map.hasLayer(m)) map.removeLayer(m);
-  });
-  if(activeTab==='squad') renderList();
-  renderRevealControls();
-}
-setInterval(refreshTeamVisibility, 5000);
 
 // ---------- mapa ----------
 var map = L.map('map', { zoomControl:false, attributionControl:true }).setView([you.lat, you.lng], 17);
@@ -578,7 +522,6 @@ document.getElementById('you-icon-close').addEventListener('click', function(){
   document.getElementById('you-icon-modal').style.display = 'none';
 });
 updateYouIconBtn();
-renderRevealControls();
 
 // ---------- modo "adicionar ponto" ----------
 var addPointBtn = document.getElementById('add-point-btn');
@@ -688,13 +631,13 @@ function renderList(){
 
   list.innerHTML = '';
   if(activeTab === 'squad'){
-    var ids = Object.keys(squad).filter(function(id){ return canSeeTeammate(squad[id]); });
+    var ids = Object.keys(squad);
     ids.forEach(function(id){
       var s = squad[id];
       var db = distBearing(you.lat, you.lng, s.lat, s.lng);
       list.appendChild(rowEl(s.name, fmtCoord(s.lat, s.lng), db.dist + ' m', db.brng + '°', s.lat, s.lng, s.id, 'squad', false, 'var(--squad)', false));
     });
-    if(ids.length===0) list.innerHTML = '<div class="empty">Ninguém visível ainda. Compartilhe o código na aba Party ou peça pro admin liberar seu time.</div>';
+    if(ids.length===0) list.innerHTML = '<div class="empty">Ninguém mais na sua party ainda. Compartilhe o código na aba Party.</div>';
   } else {
     var wids = Object.keys(waypoints);
     if(wids.length > 0){
@@ -883,80 +826,20 @@ pttBtn.addEventListener('pointerup', stopRecording);
 pttBtn.addEventListener('pointerleave', function(){ if(recording) stopRecording(); });
 
 // ---------- party ----------
-function teamLabel(t){ return t === 'A' ? 'Time A' : (t === 'B' ? 'Time B' : 'Sem time'); }
 function renderParty(){
   var list = document.getElementById('party-list');
   list.innerHTML = '';
   var mine = document.createElement('div'); mine.className='row'; mine.style.cursor='default';
-  mine.innerHTML = '<div class="swatch" style="background:var(--you)"></div><div class="row-main"><div class="row-name">'+(callsignEl().value||'VOCÊ')+' (você)'+(amAdmin?' ★':'')+'</div><div class="row-coord">'+teamLabel(myTeam)+'</div></div>';
+  mine.innerHTML = '<div class="swatch" style="background:var(--you)"></div><div class="row-main"><div class="row-name">'+(callsignEl().value||'VOCÊ')+' (você)</div></div>';
   var mtag = document.createElement('span'); mtag.className='status-tag status-conectado'; mtag.textContent='Conectado';
   mine.appendChild(mtag); list.appendChild(mine);
 
   Object.keys(squad).forEach(function(id){
     var s = squad[id];
     var row = document.createElement('div'); row.className='row'; row.style.cursor='default';
-    if(!canSeeTeammate(s)) row.style.opacity = '0.4';
-    row.innerHTML = '<div class="swatch" style="background:var(--squad)"></div><div class="row-main"><div class="row-name">'+s.name+(s.is_admin?' ★':'')+'</div><div class="row-coord">'+teamLabel(s.team)+'</div></div>';
+    row.innerHTML = '<div class="swatch" style="background:var(--squad)"></div><div class="row-main"><div class="row-name">'+s.name+'</div></div>';
     var tag = document.createElement('span'); tag.className='status-tag status-conectado'; tag.textContent='Conectado';
     row.appendChild(tag); list.appendChild(row);
-  });
-}
-
-// ---------- times e administrador ----------
-document.querySelectorAll('#team-buttons .tab').forEach(function(btn){
-  btn.classList.toggle('active', btn.dataset.team === myTeam);
-  btn.addEventListener('click', function(){
-    myTeam = this.dataset.team;
-    localStorage.setItem('gridsix-team', myTeam);
-    document.querySelectorAll('#team-buttons .tab').forEach(function(b){ b.classList.toggle('active', b.dataset.team===myTeam); });
-    pushMyPosition(true);
-    refreshTeamVisibility();
-    renderParty();
-  });
-});
-var adminToggle = document.getElementById('admin-toggle');
-adminToggle.checked = amAdmin;
-document.getElementById('admin-reveal').style.display = amAdmin ? 'block' : 'none';
-adminToggle.addEventListener('change', function(){
-  amAdmin = this.checked;
-  localStorage.setItem('gridsix-admin', amAdmin ? '1' : '0');
-  document.getElementById('admin-reveal').style.display = amAdmin ? 'block' : 'none';
-  pushMyPosition(true);
-  refreshTeamVisibility();
-  renderParty();
-});
-
-function triggerReveal(team, minutes){
-  if(!sb) return;
-  var expiresAtMs = Date.now() + minutes*60000;
-  sb.from('reveals').insert({ party_code:partyCode, team:team, expires_at:new Date(expiresAtMs).toISOString() }).then(function(res){
-    if(!res.error){
-      activeReveals[team] = expiresAtMs;
-      refreshTeamVisibility();
-    }
-  });
-}
-function renderRevealControls(){
-  ['A','B'].forEach(function(team){
-    var el = document.getElementById('reveal-' + team.toLowerCase());
-    if(!el) return;
-    el.innerHTML = '';
-    var label = document.createElement('span'); label.className='rlabel'; label.textContent = 'Time ' + team;
-    el.appendChild(label);
-    var exp = activeReveals[team];
-    if(exp && exp > Date.now()){
-      var status = document.createElement('span'); status.className='rstatus';
-      var secsLeft = Math.max(0, Math.round((exp - Date.now())/1000));
-      var m = Math.floor(secsLeft/60), s = secsLeft%60;
-      status.textContent = 'liberado por mais ' + m + ':' + (s<10?'0':'') + s;
-      el.appendChild(status);
-    } else {
-      [2,5,10].forEach(function(min){
-        var b = document.createElement('button'); b.type='button'; b.textContent = min + ' min';
-        b.addEventListener('click', function(){ triggerReveal(team, min); });
-        el.appendChild(b);
-      });
-    }
   });
 }
 document.getElementById('party-copy').addEventListener('click', function(){
@@ -989,7 +872,7 @@ function joinParty(){
 }
 
 // ---------- ponte com o backend ----------
-var playersChannel = null, waypointsChannel = null, messagesChannel = null, revealsChannel = null;
+var playersChannel = null, waypointsChannel = null, messagesChannel = null;
 
 function clearSquadMarkers(){
   Object.keys(squadMarkers).forEach(function(id){ map.removeLayer(squadMarkers[id]); });
@@ -1004,15 +887,11 @@ function upsertSquadMember(row){
   if(row.id === myId) return;
   var prev = squad[row.id];
   squad[row.id] = row;
-  var visible = canSeeTeammate(row);
   if(squadMarkers[row.id]){
     squadMarkers[row.id].setLatLng([row.lat, row.lng]);
     if(!prev || prev.name !== row.name) squadMarkers[row.id].setIcon(icon('pin-squad', row.name));
-    if(visible && !map.hasLayer(squadMarkers[row.id])) squadMarkers[row.id].addTo(map);
-    else if(!visible && map.hasLayer(squadMarkers[row.id])) map.removeLayer(squadMarkers[row.id]);
   } else {
-    squadMarkers[row.id] = L.marker([row.lat, row.lng], { icon: icon('pin-squad', row.name) });
-    if(visible) squadMarkers[row.id].addTo(map);
+    squadMarkers[row.id] = L.marker([row.lat, row.lng], { icon: icon('pin-squad', row.name) }).addTo(map);
   }
   document.getElementById('status-text').textContent = (Object.keys(squad).length) + ' na malha';
   if(activeTab==='squad' || activeTab==='party') renderList();
@@ -1065,8 +944,7 @@ function pushMyPosition(force){
   lastPush = now;
   sb.from('players').upsert({
     id:myId, party_code:partyCode, name: callsignEl().value || 'VOCÊ',
-    lat:you.lat, lng:you.lng, heading:youHeading, updated_at:new Date().toISOString(),
-    team: myTeam || null, is_admin: amAdmin
+    lat:you.lat, lng:you.lng, heading:youHeading, updated_at:new Date().toISOString()
   }).then(function(res){
     setSyncStatus(!res.error, res.error ? 'sem conexão' : (Object.keys(squad).length) + ' na malha');
   });
@@ -1086,21 +964,12 @@ function loadPartyData(){
       addMessage(m.sender, m.body, m.audio_url ? { url:m.audio_url } : null, m.sender === (callsignEl().value || 'VOCÊ'));
     });
   });
-  sb.from('reveals').select('*').eq('party_code', partyCode).then(function(res){
-    activeReveals = {};
-    (res.data || []).forEach(function(r){
-      var t = new Date(r.expires_at).getTime();
-      if(t > Date.now()) activeReveals[r.team] = t;
-    });
-    refreshTeamVisibility();
-  });
 }
 
 function subscribeParty(){
   if(playersChannel) sb.removeChannel(playersChannel);
   if(waypointsChannel) sb.removeChannel(waypointsChannel);
   if(messagesChannel) sb.removeChannel(messagesChannel);
-  if(revealsChannel) sb.removeChannel(revealsChannel);
 
   playersChannel = sb.channel('players-' + partyCode)
     .on('postgres_changes', { event:'*', schema:'public', table:'players', filter:'party_code=eq.' + partyCode }, function(payload){
@@ -1120,13 +989,6 @@ function subscribeParty(){
       var m = payload.new;
       addMessage(m.sender, m.body, m.audio_url ? { url:m.audio_url } : null, m.sender === (callsignEl().value || 'VOCÊ'));
     }).subscribe();
-
-  revealsChannel = sb.channel('reveals-' + partyCode)
-    .on('postgres_changes', { event:'INSERT', schema:'public', table:'reveals', filter:'party_code=eq.' + partyCode }, function(payload){
-      var r = payload.new;
-      activeReveals[r.team] = new Date(r.expires_at).getTime();
-      refreshTeamVisibility();
-    }).subscribe();
 }
 
 function switchParty(code){
@@ -1135,7 +997,6 @@ function switchParty(code){
   document.getElementById('party-code-val').textContent = partyCode;
   clearSquadMarkers(); clearWaypointMarkers();
   messages = [];
-  activeReveals = {};
   if(sb){ loadPartyData(); subscribeParty(); pushMyPosition(true); }
   renderList();
 }
