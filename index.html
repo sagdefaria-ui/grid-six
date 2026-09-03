@@ -255,6 +255,12 @@
   .chip-icon.selected{border-color:var(--you); background:rgba(91,184,232,.15);}
   .chip-color{width:30px; height:30px; border-radius:50%; border:2px solid transparent;}
   .chip-color.selected{border-color:var(--text-primary);}
+  .chip-weight{
+    width:56px; height:38px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .chip-weight.selected{border-color:var(--you); background:rgba(91,184,232,.15);}
+  .chip-weight .bar{background:var(--text-primary); border-radius:2px; width:34px;}
   .modal-actions{display:flex; gap:10px; margin-top:16px;}
   .modal-actions button{flex:1; padding:11px; border-radius:8px; font-family:var(--sans); font-size:13px; font-weight:600; border:none;}
   #wp-cancel{background:var(--panel-2); color:var(--text-secondary); border:0.5px solid var(--border) !important;}
@@ -358,6 +364,19 @@
     <div id="you-icon-chips" class="chip-row"></div>
     <div class="modal-actions">
       <button id="you-icon-close" style="flex:none; width:100%">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div id="track-style-modal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-title">Estilo da linha de rastreio</div>
+    <div class="modal-label" style="margin-top:0">Cor</div>
+    <div id="track-colors" class="chip-row"></div>
+    <div class="modal-label">Espessura</div>
+    <div id="track-weights" class="chip-row"></div>
+    <div class="modal-actions">
+      <button id="track-style-close" style="flex:none; width:100%">Fechar</button>
     </div>
   </div>
 </div>
@@ -500,6 +519,8 @@ refreshYouConeRef();
 // ---------- rastreamento (linha até jogador/ponto) ----------
 var trackTarget = null; // { id, group }
 var trackLine = null;
+var trackColor = localStorage.getItem('gridsix-track-color') || '#FF3B30';
+var trackWeight = parseInt(localStorage.getItem('gridsix-track-weight') || '3', 10);
 function targetLatLng(t){
   if(!t) return null;
   if(t.group === 'squad'){ var s = squad[t.id]; return s ? [s.lat, s.lng] : null; }
@@ -517,11 +538,12 @@ function updateTrack(){
   if(!tll){ clearTrack(); return; }
   var latlngs = [[you.lat, you.lng], tll];
   if(trackLine) trackLine.setLatLngs(latlngs);
-  else trackLine = L.polyline(latlngs, { color:'#FF3B30', weight:3, dashArray:'9,7', opacity:.95 }).addTo(map);
+  else trackLine = L.polyline(latlngs, { color:trackColor, weight:trackWeight, dashArray:'9,7', opacity:.95 }).addTo(map);
   var db = distBearing(you.lat, you.lng, tll[0], tll[1]);
-  chip.innerHTML = '📐 Rastreando <b>' + targetLabel(trackTarget) + '</b> — ' + db.dist + ' m · ' + db.brng + '°<button id="track-stop">✕</button>';
+  chip.innerHTML = '📐 Rastreando <b>' + targetLabel(trackTarget) + '</b> — ' + db.dist + ' m · ' + db.brng + '°<button id="track-style-btn" title="Cor e espessura">🎨</button><button id="track-stop">✕</button>';
   chip.style.display = 'flex';
   document.getElementById('track-stop').addEventListener('click', clearTrack);
+  document.getElementById('track-style-btn').addEventListener('click', openTrackStyleModal);
 }
 function setTrack(id, group){
   if(trackTarget && trackTarget.id === id && trackTarget.group === group){ clearTrack(); return; }
@@ -534,6 +556,42 @@ function clearTrack(){
   updateTrack();
   if(activeTab==='squad' || activeTab==='points') renderList();
 }
+
+// ---------- estilo da linha de rastreio ----------
+var TRACK_WEIGHTS = [2, 3, 5, 8];
+function renderTrackStyleChips(){
+  var colorsEl = document.getElementById('track-colors'); colorsEl.innerHTML = '';
+  COLORS.concat(['#FF3B30']).forEach(function(c){
+    if(colorsEl.querySelector('[data-c="'+c+'"]')) return;
+    var b = document.createElement('button'); b.type='button'; b.dataset.c = c;
+    b.className = 'chip-color' + (c===trackColor ? ' selected' : ''); b.style.background = c;
+    b.addEventListener('click', function(){
+      trackColor = c; localStorage.setItem('gridsix-track-color', trackColor);
+      if(trackLine) trackLine.setStyle({ color:trackColor });
+      renderTrackStyleChips();
+    });
+    colorsEl.appendChild(b);
+  });
+  var weightsEl = document.getElementById('track-weights'); weightsEl.innerHTML = '';
+  TRACK_WEIGHTS.forEach(function(w){
+    var b = document.createElement('button'); b.type='button';
+    b.className = 'chip-weight' + (w===trackWeight ? ' selected' : '');
+    b.innerHTML = '<div class="bar" style="height:'+w+'px"></div>';
+    b.addEventListener('click', function(){
+      trackWeight = w; localStorage.setItem('gridsix-track-weight', String(trackWeight));
+      if(trackLine) trackLine.setStyle({ weight:trackWeight });
+      renderTrackStyleChips();
+    });
+    weightsEl.appendChild(b);
+  });
+}
+function openTrackStyleModal(){
+  renderTrackStyleChips();
+  document.getElementById('track-style-modal').style.display = 'flex';
+}
+document.getElementById('track-style-close').addEventListener('click', function(){
+  document.getElementById('track-style-modal').style.display = 'none';
+});
 
 var squadMarkers = {};
 var waypointMarkers = {};
