@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Grid Six — Rastreador tático</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Grid Six">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#12140F">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --bg:#12140F; --panel:#1B2015; --panel-2:#212819; --border:#3A4530; --border-strong:#4C5A3C;
+    --text-primary:#EDEAD8; --text-secondary:#A9A88F; --text-muted:#6F6E5C;
+    --you:#5BB8E8; --squad:#E8A23D; --way:#E85D24; --ok:#7CB342; --danger:#D9553F;
+    --sans:'Inter',system-ui,sans-serif; --mono:'JetBrains Mono',monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; height:100%; background:var(--bg); overflow:hidden; overscroll-behavior:none;}
+  body{font-family:var(--sans); color:var(--text-primary);}
+  #map{position:absolute; inset:0;}
+  #map.placing{cursor:crosshair;}
+  .leaflet-control-attribution{background:rgba(18,20,15,.7) !important; color:var(--text-muted) !important; font-size:9px !important;}
+  .leaflet-control-attribution a{color:var(--text-secondary) !important;}
+  .leaflet-control-zoom{display:none;}
+
+  /* HUD superior */
+  #hud{
+    position:absolute; top:0; left:0; right:0; z-index:500;
+    padding:calc(env(safe-area-inset-top,0px) + 10px) 12px 10px;
+    background:linear-gradient(to bottom, rgba(18,20,15,.92), rgba(18,20,15,0));
+    display:flex; align-items:center; gap:8px; transition:padding-right .2s;
+  }
+  #callsign{
+    background:transparent; border:none; color:var(--text-primary); font-family:var(--mono);
+    font-size:14px; font-weight:700; letter-spacing:.03em; width:80px; padding:6px 0;
+  }
+  #callsign:focus{outline:none; border-bottom:1px solid var(--border-strong);}
+  #you-icon-btn{
+    flex-shrink:0; width:32px; height:32px; border-radius:50%; padding:0; border:none; background:none;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .status-pill{
+    display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-secondary);
+    background:var(--panel); border:0.5px solid var(--border); border-radius:999px; padding:5px 10px; flex-shrink:0;
+  }
+  .dot{width:6px; height:6px; border-radius:50%; background:var(--ok);}
+  .dot.off{background:var(--text-muted);}
+  #fmt-toggle{
+    margin-left:auto; font-family:var(--mono); font-size:12px; font-weight:700; color:var(--text-primary);
+    background:var(--panel); border:0.5px solid var(--border-strong); border-radius:8px; padding:8px 12px; flex-shrink:0;
+  }
+  #fmt-toggle:active{background:var(--panel-2);}
+  #compass-btn{
+    font-size:15px; line-height:1; background:var(--panel); border:0.5px solid var(--border-strong);
+    border-radius:8px; padding:7px 10px; color:var(--text-secondary); flex-shrink:0;
+  }
+  #compass-btn.on{color:var(--you); border-color:var(--you);}
+  #compass-btn:active{background:var(--panel-2);}
+
+  /* aviso de protótipo */
+  #banner{
+    position:absolute; top:56px; left:12px; right:12px; z-index:499;
+    background:var(--panel); border:0.5px solid var(--border); border-radius:8px;
+    padding:8px 12px; font-size:12px; color:var(--text-secondary); display:flex; gap:8px; align-items:flex-start;
+  }
+  #banner b{color:var(--text-primary); font-weight:500;}
+  #banner button{background:none; border:none; color:var(--text-muted); font-size:16px; line-height:1; margin-left:auto; padding:0 2px;}
+  #track-chip{
+    position:absolute; top:56px; left:12px; right:12px; z-index:498;
+    background:var(--panel); border:0.5px solid var(--you); border-radius:8px;
+    padding:8px 12px; font-size:12px; color:var(--text-primary); display:none; align-items:center; gap:8px;
+  }
+  #track-chip b{font-weight:600;}
+  #track-chip button{background:none; border:none; color:var(--text-muted); font-size:16px; line-height:1; margin-left:auto; padding:0 2px;}
+
+  /* marcadores */
+  .pin{width:26px; height:26px; border-radius:50%; border:3px solid var(--bg); box-shadow:0 0 0 2px currentColor;}
+  .pin-you{background:var(--you); color:var(--you); position:relative; z-index:1;}
+  .pin-squad{background:var(--squad); color:var(--squad);}
+  .pin-custom{
+    width:26px; height:26px; border-radius:50%; border:3px solid var(--bg);
+    display:flex; align-items:center; justify-content:center; font-size:13px; box-shadow:0 0 0 2px rgba(0,0,0,.25);
+  }
+  .pin-3d{
+    width:32px; height:32px; border-radius:50%; position:relative;
+    background:radial-gradient(circle at 33% 28%, #B9E7FA 0%, var(--you) 42%, #144C68 100%);
+    border:1.5px solid rgba(0,0,0,.4);
+    box-shadow:0 5px 9px rgba(0,0,0,.5), inset 0 1px 2px rgba(255,255,255,.6), inset 0 -4px 6px rgba(0,0,0,.4);
+    display:flex; align-items:center; justify-content:center; font-size:15px;
+    text-shadow:0 1px 2px rgba(0,0,0,.5);
+  }
+  .pin-3d::after{
+    content:''; position:absolute; top:4px; left:7px; width:11px; height:6px; border-radius:50%;
+    background:rgba(255,255,255,.6); filter:blur(1.2px); transform:rotate(-25deg);
+  }
+  .pin-label{
+    font-family:var(--mono); font-size:10px; font-weight:700; color:var(--text-primary);
+    background:rgba(18,20,15,.85); border:0.5px solid var(--border); border-radius:4px; padding:1px 5px;
+    white-space:nowrap; transform:translate(18px,-16px);
+  }
+  .youwrap{position:relative; width:32px; height:32px;}
+  .dir{position:absolute; left:50%; top:50%; width:0; height:0; pointer-events:none; transform:translate(-50%,-50%) rotate(0deg); transform-origin:50% 50%;}
+  .cone{position:absolute; left:0; top:0; width:0; height:0; border-left:18px solid transparent; border-right:18px solid transparent; border-bottom:52px solid rgba(91,184,232,.42); transform:translate(-50%,-100%);}
+  .nose{position:absolute; left:0; top:0; width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-bottom:16px solid var(--you); transform:translate(-50%,-124%);}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(237,234,216,.5)} 70%{box-shadow:0 0 0 16px rgba(237,234,216,0)} 100%{box-shadow:0 0 0 0 rgba(237,234,216,0)}}
+  .pulse-target{animation:pulse .7s ease-out 2;}
+
+  /* painel inferior (retrato) */
+  #sheet{
+    position:absolute; left:0; right:0; bottom:0; z-index:500;
+    background:var(--panel); border-top:0.5px solid var(--border-strong);
+    border-radius:16px 16px 0 0; padding-bottom:env(safe-area-inset-bottom,0px);
+    max-height:50vh; display:flex; flex-direction:column;
+  }
+  #grip{width:36px; height:4px; background:var(--border-strong); border-radius:2px; margin:8px auto 4px; flex-shrink:0;}
+  #tabs{display:flex; gap:6px; padding:4px 14px 10px; overflow-x:auto; flex-shrink:0;}
+  .tab{
+    font-family:var(--sans); font-size:12.5px; font-weight:500; color:var(--text-secondary); white-space:nowrap;
+    background:transparent; border:0.5px solid var(--border); border-radius:8px; padding:7px 12px;
+  }
+  .tab.active{color:var(--bg); background:var(--text-primary); border-color:var(--text-primary);}
+  .tab{position:relative;}
+  .tab .unread-dot{
+    position:absolute; top:-3px; right:-3px; width:9px; height:9px; border-radius:50%;
+    background:var(--danger); border:1.5px solid var(--panel); display:none;
+  }
+  .tab.has-unread .unread-dot{display:block;}
+  #list{overflow-y:auto; padding:0 14px 10px; flex:1;}
+  .row{
+    display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:0.5px solid var(--border); cursor:pointer;
+  }
+  .row:active{background:var(--panel-2);}
+  .row:last-child{border-bottom:none;}
+  .swatch{width:10px; height:10px; border-radius:50%; flex-shrink:0;}
+  .row-main{flex:1; min-width:0;}
+  .row-name{font-size:13px; font-weight:500; color:var(--text-primary);}
+  .row-coord{font-family:var(--mono); font-size:11px; color:var(--text-secondary); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .row-meta{text-align:right; font-family:var(--mono); font-size:11px; color:var(--text-muted); flex-shrink:0;}
+  .row-meta b{display:block; color:var(--text-secondary); font-size:12px; font-weight:500;}
+  .row-del{
+    flex-shrink:0; background:none; border:0.5px solid var(--border); color:var(--text-muted);
+    border-radius:6px; width:26px; height:26px; font-size:13px; line-height:1;
+  }
+  .row-del:active{color:var(--danger); border-color:var(--danger);}
+  .empty{padding:20px 0; text-align:center; color:var(--text-muted); font-size:12px;}
+  .list-toolbar{display:flex; justify-content:flex-end; flex-wrap:wrap; gap:6px; padding:2px 0 8px;}
+  .list-toolbar button{
+    font-family:var(--sans); font-size:11.5px; color:var(--danger); background:none;
+    border:0.5px solid var(--border); border-radius:6px; padding:5px 10px;
+  }
+
+  #addbar{display:flex; gap:8px; padding:0 14px 12px; flex-shrink:0;}
+  #addbar input{
+    flex:1; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
+    color:var(--text-primary); font-family:var(--mono); font-size:12px; padding:9px 10px; min-width:0;
+  }
+  #addbar input::placeholder{color:var(--text-muted); font-family:var(--sans);}
+  #addbar button{
+    background:var(--way); color:#2A1408; border:none; border-radius:8px; padding:0 14px;
+    font-family:var(--sans); font-size:13px; font-weight:600;
+  }
+  #maphint{
+    position:absolute; bottom:calc(50vh + 12px); left:50%; transform:translateX(-50%); z-index:499;
+    background:var(--panel); border:0.5px solid var(--border); border-radius:999px; padding:6px 12px;
+    font-size:11px; color:var(--text-secondary); pointer-events:none; opacity:0; transition:opacity .3s;
+  }
+  #maphint.show{opacity:1;}
+
+  #locate-btn, #layer-toggle, #add-point-btn{
+    position:absolute; z-index:499; width:46px; height:46px; border-radius:50%;
+    background:var(--panel); border:0.5px solid var(--border-strong); color:var(--text-secondary);
+    font-size:18px; display:flex; align-items:center; justify-content:center; right:14px;
+    transition:bottom .2s, right .2s;
+  }
+  #locate-btn{ color:var(--you); bottom:calc(50vh + 16px); }
+  #locate-btn:active, #layer-toggle:active, #add-point-btn:active{background:var(--panel-2);}
+  #layer-toggle{ bottom:calc(50vh + 16px + 58px); }
+  #layer-toggle.on{color:var(--you); border-color:var(--you);}
+  #add-point-btn{ bottom:calc(50vh + 16px + 116px); font-size:17px; }
+  #add-point-btn.on{color:var(--way); border-color:var(--way); background:rgba(232,93,36,.15);}
+  body.landscape #locate-btn{ bottom:16px; right:calc(360px + 16px); }
+  body.landscape #layer-toggle{ bottom:74px; right:calc(360px + 16px); }
+  body.landscape #add-point-btn{ bottom:132px; right:calc(360px + 16px); }
+
+  #immersive-btn{
+    position:absolute; z-index:600; top:calc(env(safe-area-inset-top,0px) + 10px); right:14px;
+    width:38px; height:38px; border-radius:50%; display:none; align-items:center; justify-content:center;
+    background:var(--panel); border:0.5px solid var(--border-strong); color:var(--text-secondary); font-size:16px;
+  }
+  body.landscape #immersive-btn{ display:flex; }
+  #immersive-btn.on{ color:var(--you); border-color:var(--you); }
+  body.immersive #hud, body.immersive #banner, body.immersive #maphint, body.immersive #sheet{ display:none !important; }
+
+  /* Comunicação */
+  #comms-panel{display:none; flex-direction:column; flex:1; min-height:0;}
+  #chat-log{flex:1; overflow-y:auto; padding:0 14px; display:flex; flex-direction:column; gap:8px;}
+  .msg{max-width:78%; padding:7px 10px; border-radius:10px; font-size:12.5px;}
+  .msg-them{align-self:flex-start; background:var(--panel-2); border:0.5px solid var(--border);}
+  .msg-me{align-self:flex-end; background:rgba(91,184,232,.16); border:0.5px solid rgba(91,184,232,.4);}
+  .msg-sender{font-family:var(--mono); font-size:10px; font-weight:700; color:var(--text-muted); margin-bottom:2px;}
+  .msg audio{height:30px; width:190px; margin-top:2px;}
+  #chat-bar{display:flex; gap:8px; padding:10px 14px 6px; flex-shrink:0;}
+  #chat-bar input{
+    flex:1; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
+    color:var(--text-primary); font-family:var(--sans); font-size:13px; padding:9px 10px; min-width:0;
+  }
+  #chat-bar button{background:var(--you); color:#062033; border:none; border-radius:8px; padding:0 14px; font-weight:600; font-size:13px;}
+  #ptt-row{padding:4px 14px 14px; flex-shrink:0;}
+  #ptt{
+    width:100%; padding:12px; border-radius:10px; background:var(--panel-2); border:0.5px solid var(--border-strong);
+    color:var(--text-secondary); font-family:var(--sans); font-size:13px; font-weight:500;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  #ptt.active{background:rgba(217,85,63,.18); border-color:var(--danger); color:var(--danger);}
+  #ptt-note{padding:0 14px 10px; font-size:10.5px; color:var(--text-muted); flex-shrink:0;}
+
+  /* Party */
+  #party-panel{display:none; flex-direction:column; flex:1; min-height:0;}
+  #party-code{
+    margin:0 14px 10px; padding:10px 12px; background:var(--panel-2); border:0.5px dashed var(--border-strong);
+    border-radius:8px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
+  }
+  #party-code .code{font-family:var(--mono); font-size:15px; font-weight:700; letter-spacing:.05em;}
+  #party-code button{background:none; border:0.5px solid var(--border-strong); color:var(--text-secondary); border-radius:6px; padding:5px 10px; font-size:11px;}
+  #party-list{overflow-y:auto; padding:0 14px; flex:1;}
+  .status-tag{font-family:var(--mono); font-size:10px; padding:2px 6px; border-radius:4px;}
+  .status-conectado{color:var(--ok); background:rgba(124,179,66,.15);}
+  #invite-bar{display:flex; gap:8px; padding:10px 14px 4px; flex-shrink:0;}
+  #invite-bar input{
+    flex:1; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
+    color:var(--text-primary); font-family:var(--mono); font-size:13px; padding:9px 10px; min-width:0; text-transform:uppercase;
+  }
+  #invite-bar button{background:var(--squad); color:#3A2506; border:none; border-radius:8px; padding:0 14px; font-weight:600; font-size:13px;}
+  #party-hint{padding:0 14px 12px; font-size:10.5px; color:var(--text-muted); flex-shrink:0;}
+
+  /* Modal de novo ponto */
+  .modal-overlay{position:fixed; inset:0; z-index:900; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; padding:20px;}
+  .modal-card{width:min(320px,100%); background:var(--panel); border:0.5px solid var(--border-strong); border-radius:14px; padding:18px;}
+  .modal-title{font-size:15px; font-weight:600; margin-bottom:10px;}
+  .modal-label{font-size:11px; color:var(--text-muted); margin:10px 0 6px;}
+  #wp-name{
+    width:100%; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
+    color:var(--text-primary); font-family:var(--sans); font-size:14px; padding:9px 10px;
+  }
+  .modal-input{
+    width:100%; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
+    color:var(--text-primary); font-family:var(--sans); font-size:14px; padding:9px 10px; margin-bottom:8px;
+  }
+  #auth-gate{ z-index:1000; }
+  #auth-gate .modal-card{ width:min(340px,100%); }
+  #auth-tabs .tab.active{ background:var(--you); border-color:var(--you); color:#062033; }
+  #auth-error{ color:var(--danger); font-size:12px; min-height:16px; margin-bottom:2px; }
+  #auth-skip{ width:100%; margin-top:12px; background:none; border:none; color:var(--text-muted); font-size:12px; padding:6px; }
+  #friends-panel{display:none; flex-direction:column; flex:1; min-height:0;}
+  #friend-search-bar{display:flex; gap:8px; padding:0 14px 8px; flex-shrink:0;}
+  #friend-search-bar input{
+    flex:1; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
+    color:var(--text-primary); font-family:var(--sans); font-size:13px; padding:9px 10px; min-width:0;
+  }
+  #friend-search-bar button{background:var(--you); color:#062033; border:none; border-radius:8px; padding:0 14px; font-weight:600; font-size:13px;}
+  #friend-search-result{padding:0 14px; flex-shrink:0;}
+  #friends-list{overflow-y:auto; padding:0 14px 10px; flex:1;}
+  #account-footer{padding:8px 14px 12px; flex-shrink:0; text-align:center;}
+  #account-footer button{background:none; border:none; color:var(--text-muted); font-size:11px; text-decoration:underline;}
+  .chip-row{display:flex; flex-wrap:wrap; gap:8px;}
+  .chip-icon{
+    width:38px; height:38px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--border);
+    font-size:17px; display:flex; align-items:center; justify-content:center; color:var(--text-primary);
+  }
+  .chip-icon.selected{border-color:var(--you); background:rgba(91,184,232,.15);}
+  .chip-color{width:30px; height:30px; border-radius:50%; border:2px solid transparent;}
+  .chip-color.selected{border-color:var(--text-primary);}
+  .chip-weight{
+    width:56px; height:38px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .chip-weight.selected{border-color:var(--you); background:rgba(91,184,232,.15);}
+  .chip-weight .bar{background:var(--text-primary); border-radius:2px; width:34px;}
+  .modal-actions{display:flex; gap:10px; margin-top:16px;}
+  .modal-actions button{flex:1; padding:11px; border-radius:8px; font-family:var(--sans); font-size:13px; font-weight:600; border:none;}
+  #wp-cancel{background:var(--panel-2); color:var(--text-secondary); border:0.5px solid var(--border) !important;}
+  #wp-confirm{background:var(--way); color:#2A1408;}
+
+  /* Paisagem: painel vira barra lateral */
+  body.landscape #hud{padding-right:calc(360px + 12px);}
+  body.landscape #maphint{left:calc((100% - 360px) / 2);}
+  body.landscape #sheet{
+    top:0; left:auto; right:0; bottom:0; width:360px;
+    border-radius:0; border-top:none; border-left:0.5px solid var(--border-strong);
+    max-height:none; padding-top:env(safe-area-inset-top,0px);
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div id="hud">
+  <button id="you-icon-btn" title="Escolher ícone">●</button>
+  <input id="callsign" maxlength="12">
+  <div class="status-pill"><span class="dot off" id="sync-dot"></span><span id="status-text">conectando…</span></div>
+  <button id="compass-btn" title="Ativar bússola">🧭</button>
+  <button id="fmt-toggle">GPS</button>
+</div>
+
+<div id="banner">
+  <span><b>Conectado ao backend</b> — posição, pontos, chat de texto e áudio do PTT sincronizam entre celulares na mesma party.</span>
+  <button onclick="document.getElementById('banner').style.display='none'">✕</button>
+</div>
+
+<div id="maphint">Toque no mapa para posicionar o ponto</div>
+<div id="track-chip"></div>
+<button id="locate-btn" title="Me localizar">🎯</button>
+<button id="layer-toggle" title="Alternar mapa/satélite">🛰️</button>
+<button id="add-point-btn" title="Adicionar ponto">📍</button>
+<button id="immersive-btn" title="Esconder menus">⛶</button>
+
+<div id="auth-gate" class="modal-overlay" style="display:flex; background:rgba(11,13,8,.97);">
+  <div class="modal-card">
+    <div class="modal-title">Grid Six</div>
+    <div class="chip-row" id="auth-tabs" style="margin-bottom:12px">
+      <button type="button" class="tab active" data-mode="login">Entrar</button>
+      <button type="button" class="tab" data-mode="signup">Criar conta</button>
+    </div>
+    <input id="auth-callsign" class="modal-input" placeholder="Seu nome de operador" style="display:none">
+    <input id="auth-email" class="modal-input" placeholder="E-mail" type="email" autocapitalize="off">
+    <input id="auth-password" class="modal-input" placeholder="Senha" type="password">
+    <div id="auth-error"></div>
+    <div class="modal-actions">
+      <button id="auth-submit" style="flex:none; width:100%">Entrar</button>
+    </div>
+    <button id="auth-skip">Continuar sem conta</button>
+  </div>
+</div>
+
+<div id="sheet">
+  <div id="grip"></div>
+  <div id="tabs">
+    <button class="tab active" data-tab="squad">Esquadrão</button>
+    <button class="tab" data-tab="points">Pontos</button>
+    <button class="tab" data-tab="comms">Comunicação<span class="unread-dot"></span></button>
+    <button class="tab" data-tab="party">Party</button>
+    <button class="tab" data-tab="friends">Amigos</button>
+  </div>
+
+  <div id="list"></div>
+  <div id="addbar" style="display:none">
+    <input id="mgrs-input" placeholder="Cole GPS (lat,lng) ou MGRS aqui">
+    <button id="add-btn">Plotar</button>
+  </div>
+
+  <div id="comms-panel">
+    <div id="chat-log"></div>
+    <div id="chat-bar">
+      <input id="chat-input" placeholder="Mensagem para a party">
+      <button id="chat-send">Enviar</button>
+    </div>
+    <div id="ptt-row"><button id="ptt">🎙️ Segure para falar</button></div>
+    <div id="ptt-note">Envio pode levar um segundo — depende da sua conexão.</div>
+  </div>
+
+  <div id="party-panel">
+    <div id="party-code">
+      <div>Sua party <span class="code" id="party-code-val">—</span></div>
+      <button id="party-copy">Copiar</button>
+    </div>
+
+    <div id="party-list"></div>
+    <div id="invite-bar" style="flex-direction:column">
+      <input id="join-name-input" placeholder="Seu nome (ex: Falcão)">
+      <div style="display:flex; gap:8px; width:100%">
+        <input id="invite-input" placeholder="Código da party (ex: GS-4821)" style="flex:1">
+        <button id="invite-btn">Entrar</button>
+      </div>
+    </div>
+    <div id="party-hint">Compartilhe o código acima com seu esquadrão — quem digitar o mesmo código se conecta com você em tempo real.</div>
+  </div>
+
+  <div id="friends-panel">
+    <div id="friend-search-bar">
+      <input id="friend-search" placeholder="Buscar por nome de operador">
+      <button id="friend-search-btn">Buscar</button>
+    </div>
+    <div id="friend-search-result"></div>
+    <div id="friends-list"></div>
+    <div id="account-footer"></div>
+  </div>
+</div>
+
+<div id="wp-modal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-title">Novo ponto</div>
+    <input id="wp-name" placeholder="Nome do ponto" maxlength="20">
+    <div class="modal-label">Ícone</div>
+    <div id="wp-icons" class="chip-row"></div>
+    <div class="modal-label">Cor</div>
+    <div id="wp-colors" class="chip-row"></div>
+    <div class="modal-actions">
+      <button id="wp-cancel">Cancelar</button>
+      <button id="wp-confirm">Adicionar</button>
+    </div>
+  </div>
+</div>
+
+<div id="you-icon-modal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-title">Seu ícone no mapa</div>
+    <div id="you-icon-chips" class="chip-row"></div>
+    <div class="modal-actions">
+      <button id="you-icon-close" style="flex:none; width:100%">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div id="track-style-modal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-title">Estilo da linha de rastreio</div>
+    <div class="modal-label" style="margin-top:0">Cor</div>
+    <div id="track-colors" class="chip-row"></div>
+    <div class="modal-label">Espessura</div>
+    <div id="track-weights" class="chip-row"></div>
+    <div class="modal-actions">
+      <button id="track-style-close" style="flex:none; width:100%">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="kml-input" accept=".kml,application/vnd.google-earth.kml+xml" style="display:none">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+
+// ---------- backend (Supabase) ----------
+var SUPABASE_URL = 'https://oxakoccszlcdxayiuhun.supabase.co';
+var SUPABASE_KEY = 'sb_publishable_iHNNTjEdaR_et2CgMXjgVQ_-5QZqAfN';
+var sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+function setSyncStatus(ok, label){
+  var dot = document.getElementById('sync-dot');
+  dot.classList.toggle('off', !ok);
+  document.getElementById('status-text').textContent = label;
+}
+
+// ---------- identidade ----------
+function uuid(){
+  if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c){
+    var r = Math.random()*16|0, v = c==='x'?r:(r&0x3|0x8); return v.toString(16);
+  });
+}
+var myId = localStorage.getItem('gridsix-player-id');
+if(!myId){ myId = uuid(); localStorage.setItem('gridsix-player-id', myId); }
+var partyCode = localStorage.getItem('gridsix-party-code') || ('GS-' + Math.floor(1000 + Math.random()*9000));
+localStorage.setItem('gridsix-party-code', partyCode);
+document.getElementById('party-code-val').textContent = partyCode;
+
+var savedName = localStorage.getItem('gridsix-callsign');
+if(!savedName){ savedName = 'OP-' + Math.floor(100 + Math.random()*900); localStorage.setItem('gridsix-callsign', savedName); }
+document.getElementById('callsign').value = savedName;
+
+// ---------- estado ----------
+var fmt = 'gps'; // 'gps' | 'mgrs'
+var you = { lat: -23.5505, lng: -46.6333, hasFix:false };
+var squad = {};       // id -> {id,name,lat,lng,updated_at}
+var waypoints = {};   // id -> {id,label,lat,lng,icon,color}
+var messages = [];
+var activeTab = 'squad';
+var placing = false;
+var hiddenPoints = new Set(JSON.parse(localStorage.getItem('gridsix-hidden-points') || '[]'));
+function saveHidden(){ localStorage.setItem('gridsix-hidden-points', JSON.stringify(Array.from(hiddenPoints))); }
+function isHidden(id){ return hiddenPoints.has(id); }
+function updateWaypointVisibility(id){
+  var m = waypointMarkers[id];
+  if(!m) return;
+  if(isHidden(id)){ if(map.hasLayer(m)) map.removeLayer(m); }
+  else { if(!map.hasLayer(m)) m.addTo(map); }
+}
+function toggleHidden(id){
+  if(hiddenPoints.has(id)) hiddenPoints.delete(id); else hiddenPoints.add(id);
+  saveHidden();
+  updateWaypointVisibility(id);
+  if(activeTab==='points') renderList();
+}
+
+function metersToDeg(dx, dy, atLat){
+  var dlat = dy / 111320;
+  var dlng = dx / (111320 * Math.cos(atLat * Math.PI/180));
+  return { dlat:dlat, dlng:dlng };
+}
+
+// ---------- mapa ----------
+var map = L.map('map', { zoomControl:false, attributionControl:true }).setView([you.lat, you.lng], 17);
+var streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom:19, attribution:'© OpenStreetMap'
+});
+var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom:19, attribution:'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics'
+});
+streetLayer.addTo(map);
+var usingSat = false;
+document.getElementById('layer-toggle').addEventListener('click', function(){
+  if(usingSat){ map.removeLayer(satLayer); streetLayer.addTo(map); this.classList.remove('on'); }
+  else { map.removeLayer(streetLayer); satLayer.addTo(map); this.classList.add('on'); }
+  usingSat = !usingSat;
+});
+
+function icon(cls, label){
+  return L.divIcon({
+    className:'', html:'<div style="display:flex;align-items:center"><div class="pin ' + cls + '"></div><div class="pin-label">' + label + '</div></div>',
+    iconSize:[26,26], iconAnchor:[13,13]
+  });
+}
+function iconWay(row){
+  return L.divIcon({
+    className:'', html:'<div style="display:flex;align-items:center"><div class="pin-custom" style="background:' + row.color + '">' + row.icon + '</div><div class="pin-label">' + row.label + '</div></div>',
+    iconSize:[26,26], iconAnchor:[13,13]
+  });
+}
+var YOU_ICONS = [
+  { id:'dot', glyph:null },
+  { id:'helmet', glyph:'🪖' },
+  { id:'soldier', glyph:'🥷' },
+  { id:'gun', glyph:'🔫' },
+  { id:'target', glyph:'🎯' },
+  { id:'star', glyph:'⭐' },
+  { id:'flag', glyph:'🚩' },
+  { id:'skull', glyph:'💀' }
+];
+var youIconId = localStorage.getItem('gridsix-you-icon') || 'dot';
+
+function iconYou(label){
+  var chosen = YOU_ICONS.find(function(o){ return o.id === youIconId; }) || YOU_ICONS[0];
+  var bodyHtml = '<div class="pin-3d">' + (chosen.glyph || '') + '</div>';
+  return L.divIcon({
+    className:'', html:'<div style="display:flex;align-items:center"><div class="youwrap"><div class="dir"><div class="cone"></div><div class="nose"></div></div>' + bodyHtml + '</div><div class="pin-label">' + label + '</div></div>',
+    iconSize:[32,32], iconAnchor:[16,16]
+  });
+}
+function callsignEl(){ return document.getElementById('callsign'); }
+
+var youHeading = 0;
+var youConeEl = null;
+function refreshYouConeRef(){
+  var el = youMarker.getElement();
+  youConeEl = el ? el.querySelector('.dir') : null;
+  applyHeading();
+}
+function applyHeading(){
+  if(youConeEl) youConeEl.style.transform = 'translate(-50%,-50%) rotate(' + youHeading + 'deg)';
+}
+function setHeading(deg){
+  var raw = ((deg % 360) + 360) % 360;
+  youHeading = raw;
+  if(!youConeEl) refreshYouConeRef(); else applyHeading();
+  var btn = document.getElementById('compass-btn');
+  if(btn.classList.contains('on')) btn.textContent = Math.round(raw) + '° [' + (window.__debugAngle||'') + ']';
+}
+
+var youMarker = L.marker([you.lat, you.lng], { icon: iconYou(callsignEl().value) }).addTo(map);
+refreshYouConeRef();
+
+// ---------- rastreamento (linha até jogador/ponto) ----------
+var trackTarget = null; // { id, group }
+var trackLine = null;
+var trackColor = localStorage.getItem('gridsix-track-color') || '#FF3B30';
+var trackWeight = parseInt(localStorage.getItem('gridsix-track-weight') || '3', 10);
+function targetLatLng(t){
+  if(!t) return null;
+  if(t.group === 'squad'){ var s = squad[t.id]; return s ? [s.lat, s.lng] : null; }
+  var w = waypoints[t.id]; return w ? [w.lat, w.lng] : null;
+}
+function targetLabel(t){
+  if(!t) return '';
+  if(t.group === 'squad'){ var s = squad[t.id]; return s ? s.name : ''; }
+  var w = waypoints[t.id]; return w ? (w.icon + ' ' + w.label) : '';
+}
+function updateTrack(){
+  var chip = document.getElementById('track-chip');
+  if(!trackTarget){ if(trackLine){ map.removeLayer(trackLine); trackLine = null; } chip.style.display = 'none'; return; }
+  var tll = targetLatLng(trackTarget);
+  if(!tll){ clearTrack(); return; }
+  var latlngs = [[you.lat, you.lng], tll];
+  if(trackLine) trackLine.setLatLngs(latlngs);
+  else trackLine = L.polyline(latlngs, { color:trackColor, weight:trackWeight, dashArray:'9,7', opacity:.95 }).addTo(map);
+  var db = distBearing(you.lat, you.lng, tll[0], tll[1]);
+  chip.innerHTML = '📐 Rastreando <b>' + targetLabel(trackTarget) + '</b> — ' + db.dist + ' m · ' + db.brng + '°<button id="track-style-btn" title="Cor e espessura">🎨</button><button id="track-stop">✕</button>';
+  chip.style.display = 'flex';
+  document.getElementById('track-stop').addEventListener('click', clearTrack);
+  document.getElementById('track-style-btn').addEventListener('click', openTrackStyleModal);
+}
+function setTrack(id, group){
+  if(trackTarget && trackTarget.id === id && trackTarget.group === group){ clearTrack(); return; }
+  trackTarget = { id:id, group:group };
+  updateTrack();
+  if(activeTab==='squad' || activeTab==='points') renderList();
+}
+function clearTrack(){
+  trackTarget = null;
+  updateTrack();
+  if(activeTab==='squad' || activeTab==='points') renderList();
+}
+
+// ---------- estilo da linha de rastreio ----------
+var TRACK_WEIGHTS = [2, 3, 5, 8];
+function renderTrackStyleChips(){
+  var colorsEl = document.getElementById('track-colors'); colorsEl.innerHTML = '';
+  COLORS.concat(['#FF3B30']).forEach(function(c){
+    if(colorsEl.querySelector('[data-c="'+c+'"]')) return;
+    var b = document.createElement('button'); b.type='button'; b.dataset.c = c;
+    b.className = 'chip-color' + (c===trackColor ? ' selected' : ''); b.style.background = c;
+    b.addEventListener('click', function(){
+      trackColor = c; localStorage.setItem('gridsix-track-color', trackColor);
+      if(trackLine) trackLine.setStyle({ color:trackColor });
+      renderTrackStyleChips();
+    });
+    colorsEl.appendChild(b);
+  });
+  var weightsEl = document.getElementById('track-weights'); weightsEl.innerHTML = '';
+  TRACK_WEIGHTS.forEach(function(w){
+    var b = document.createElement('button'); b.type='button';
+    b.className = 'chip-weight' + (w===trackWeight ? ' selected' : '');
+    b.innerHTML = '<div class="bar" style="height:'+w+'px"></div>';
+    b.addEventListener('click', function(){
+      trackWeight = w; localStorage.setItem('gridsix-track-weight', String(trackWeight));
+      if(trackLine) trackLine.setStyle({ weight:trackWeight });
+      renderTrackStyleChips();
+    });
+    weightsEl.appendChild(b);
+  });
+}
+function openTrackStyleModal(){
+  renderTrackStyleChips();
+  document.getElementById('track-style-modal').style.display = 'flex';
+}
+document.getElementById('track-style-close').addEventListener('click', function(){
+  document.getElementById('track-style-modal').style.display = 'none';
+});
+
+var squadMarkers = {};
+var waypointMarkers = {};
+
+// ---------- ícone do jogador ----------
+function updateYouIconBtn(){
+  var chosen = YOU_ICONS.find(function(o){ return o.id === youIconId; }) || YOU_ICONS[0];
+  document.getElementById('you-icon-btn').innerHTML = '<div class="pin-3d" style="width:28px;height:28px;font-size:13px">' + (chosen.glyph || '') + '</div>';
+}
+function renderYouIconChips(){
+  var wrap = document.getElementById('you-icon-chips'); wrap.innerHTML = '';
+  YOU_ICONS.forEach(function(o){
+    var b = document.createElement('button'); b.type = 'button';
+    b.className = 'chip-icon' + (o.id===youIconId ? ' selected' : '');
+    b.innerHTML = '<div class="pin-3d" style="width:26px;height:26px;font-size:12px">' + (o.glyph || '') + '</div>';
+    b.addEventListener('click', function(){
+      youIconId = o.id;
+      localStorage.setItem('gridsix-you-icon', youIconId);
+      youMarker.setIcon(iconYou(callsignEl().value || 'VOCÊ'));
+      refreshYouConeRef();
+      updateYouIconBtn();
+      renderYouIconChips();
+    });
+    wrap.appendChild(b);
+  });
+}
+document.getElementById('you-icon-btn').addEventListener('click', function(){
+  renderYouIconChips();
+  document.getElementById('you-icon-modal').style.display = 'flex';
+});
+document.getElementById('you-icon-close').addEventListener('click', function(){
+  document.getElementById('you-icon-modal').style.display = 'none';
+});
+updateYouIconBtn();
+
+// ---------- modo "adicionar ponto" ----------
+var addPointBtn = document.getElementById('add-point-btn');
+addPointBtn.addEventListener('click', function(){
+  placing = !placing;
+  addPointBtn.classList.toggle('on', placing);
+  document.getElementById('map').classList.toggle('placing', placing);
+  document.getElementById('maphint').classList.toggle('show', placing);
+});
+map.on('click', function(e){
+  if(!placing) return;
+  placing = false;
+  addPointBtn.classList.remove('on');
+  document.getElementById('map').classList.remove('placing');
+  document.getElementById('maphint').classList.remove('show');
+  openWpModal(e.latlng.lat, e.latlng.lng, 'PT-' + (Object.keys(waypoints).length + 1));
+});
+
+// ---------- geolocalização real ----------
+if(navigator.geolocation){
+  navigator.geolocation.watchPosition(function(pos){
+    you.lat = pos.coords.latitude; you.lng = pos.coords.longitude; you.hasFix = true;
+    youMarker.setLatLng([you.lat, you.lng]);
+    if(!you._centered){ map.setView([you.lat, you.lng], 17); you._centered = true; }
+    if(activeTab==='squad') renderList();
+    updateTrack();
+    pushMyPosition();
+  }, function(){ /* permissão negada: fica no centro padrão */ }, { enableHighAccuracy:true, maximumAge:2000 });
+}
+
+// ---------- bússola ----------
+function screenAngle(){
+  if(window.screen && window.screen.orientation && typeof window.screen.orientation.angle === 'number') return window.screen.orientation.angle;
+  if(typeof window.orientation === 'number') return window.orientation;
+  return 0;
+}
+function handleOrientation(e){
+  var rawSensor;
+  if(typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)){
+    rawSensor = e.webkitCompassHeading;
+  } else if(e.alpha != null){
+    rawSensor = 360 - e.alpha;
+  } else { return; }
+  var ang = screenAngle();
+  window.__debugAngle = 'raw:' + Math.round(rawSensor) + ' scr:' + ang;
+  setHeading(rawSensor + ang);
+}
+document.getElementById('compass-btn').addEventListener('click', function(){
+  var btn = this;
+  function start(){
+    btn.classList.add('on');
+    window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+    window.addEventListener('deviceorientation', handleOrientation, true);
+  }
+  if(typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+    DeviceOrientationEvent.requestPermission().then(function(state){ if(state === 'granted') start(); }).catch(function(){});
+  } else { start(); }
+});
+
+// ---------- me localizar ----------
+document.getElementById('locate-btn').addEventListener('click', function(){
+  map.flyTo([you.lat, you.lng], Math.max(map.getZoom(), 18), { duration:0.6 });
+  var el = youMarker.getElement();
+  var pinEl = el && (el.querySelector('.pin') || el.querySelector('.pin-3d'));
+  if(pinEl){ pinEl.classList.add('pulse-target'); setTimeout(function(){ pinEl.classList.remove('pulse-target'); }, 1400); }
+});
+
+// ---------- modo imersivo (só mapa) ----------
+document.getElementById('immersive-btn').addEventListener('click', function(){
+  document.body.classList.toggle('immersive');
+  this.classList.toggle('on');
+  this.textContent = document.body.classList.contains('immersive') ? '⤢' : '⛶';
+  setTimeout(function(){ map.invalidateSize(); }, 200);
+});
+
+// ---------- orientação da tela (retrato/paisagem) ----------
+function applyOrientation(){
+  var landscape = window.innerWidth > window.innerHeight;
+  document.body.classList.toggle('landscape', landscape);
+  if(!landscape && document.body.classList.contains('immersive')){
+    document.body.classList.remove('immersive');
+    var btn = document.getElementById('immersive-btn');
+    btn.classList.remove('on'); btn.textContent = '⛶';
+  }
+  setTimeout(function(){ map.invalidateSize(); }, 250);
+}
+window.addEventListener('resize', applyOrientation);
+window.addEventListener('orientationchange', applyOrientation);
+applyOrientation();
+
+// ---------- coordenadas ----------
+function toMGRS(lat, lng){ try{ return mgrs.forward([lng, lat]); } catch(e){ return '—'; } }
+function fromMGRS(str){ var p = mgrs.toPoint(str.replace(/\s+/g,'')); return { lat:p[1], lng:p[0] }; }
+function fmtCoord(lat, lng){ if(fmt === 'mgrs') return toMGRS(lat, lng); return lat.toFixed(5) + ', ' + lng.toFixed(5); }
+function distBearing(lat1,lng1,lat2,lng2){
+  var R=6371000, toRad=Math.PI/180;
+  var dLat=(lat2-lat1)*toRad, dLng=(lng2-lng1)*toRad;
+  var a=Math.sin(dLat/2)**2 + Math.cos(lat1*toRad)*Math.cos(lat2*toRad)*Math.sin(dLng/2)**2;
+  var dist = R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  var y=Math.sin(dLng)*Math.cos(lat2*toRad);
+  var x=Math.cos(lat1*toRad)*Math.sin(lat2*toRad)-Math.sin(lat1*toRad)*Math.cos(lat2*toRad)*Math.cos(dLng);
+  var brng=(Math.atan2(y,x)*180/Math.PI+360)%360;
+  return { dist:Math.round(dist), brng:Math.round(brng) };
+}
+
+// ---------- lista (esquadrão / pontos) ----------
+function renderList(){
+  var list = document.getElementById('list');
+  document.getElementById('addbar').style.display = activeTab==='points' ? 'flex' : 'none';
+  document.getElementById('comms-panel').style.display = activeTab==='comms' ? 'flex' : 'none';
+  document.getElementById('party-panel').style.display = activeTab==='party' ? 'flex' : 'none';
+  document.getElementById('friends-panel').style.display = activeTab==='friends' ? 'flex' : 'none';
+  list.style.display = (activeTab==='squad' || activeTab==='points') ? 'block' : 'none';
+  if(activeTab === 'comms'){ renderChat(); return; }
+  if(activeTab === 'party'){ renderParty(); return; }
+  if(activeTab === 'friends'){ renderFriends(); return; }
+
+  list.innerHTML = '';
+  if(activeTab === 'squad'){
+    var ids = Object.keys(squad);
+    ids.forEach(function(id){
+      var s = squad[id];
+      var db = distBearing(you.lat, you.lng, s.lat, s.lng);
+      list.appendChild(rowEl(s.name, fmtCoord(s.lat, s.lng), db.dist + ' m', db.brng + '°', s.lat, s.lng, s.id, 'squad', false, 'var(--squad)', false));
+    });
+    if(ids.length===0) list.innerHTML = '<div class="empty">Ninguém mais na sua party ainda. Compartilhe o código na aba Party.</div>';
+  } else {
+    var wids = Object.keys(waypoints);
+    var tb = document.createElement('div'); tb.className='list-toolbar';
+    if(wids.length > 0){
+      var allHidden = wids.length>0 && wids.every(function(id){ return hiddenPoints.has(id); });
+      var toggleBtn = document.createElement('button');
+      toggleBtn.style.color = 'var(--text-secondary)';
+      toggleBtn.textContent = allHidden ? 'Mostrar todos os pontos' : 'Esconder todos os pontos';
+      toggleBtn.addEventListener('click', function(){
+        if(allHidden) hiddenPoints.clear();
+        else wids.forEach(function(id){ hiddenPoints.add(id); });
+        saveHidden();
+        wids.forEach(updateWaypointVisibility);
+        renderList();
+      });
+      var clearBtn = document.createElement('button'); clearBtn.textContent = 'Limpar todos os pontos';
+      clearBtn.addEventListener('click', function(){
+        if(!confirm('Excluir todos os pontos plotados?')) return;
+        wids.forEach(function(id){ deleteWaypoint(id); });
+      });
+      var exportBtn = document.createElement('button'); exportBtn.style.color = 'var(--text-secondary)'; exportBtn.textContent = 'Exportar KML';
+      exportBtn.addEventListener('click', exportKML);
+      tb.appendChild(toggleBtn); tb.appendChild(exportBtn); tb.appendChild(clearBtn);
+    }
+    var importBtn = document.createElement('button'); importBtn.style.color = 'var(--text-secondary)'; importBtn.textContent = 'Importar KML';
+    importBtn.addEventListener('click', function(){ document.getElementById('kml-input').click(); });
+    tb.appendChild(importBtn);
+    list.appendChild(tb);
+    if(wids.length===0){ list.innerHTML += '<div class="empty">Toque no botão 📍 e depois no mapa pra plotar um ponto</div>'; return; }
+    wids.forEach(function(id){
+      var w = waypoints[id];
+      var db = distBearing(you.lat, you.lng, w.lat, w.lng);
+      list.appendChild(rowEl(w.icon + ' ' + w.label, fmtCoord(w.lat, w.lng), db.dist + ' m', db.brng + '°', w.lat, w.lng, w.id, 'points', true, w.color, isHidden(w.id)));
+    });
+  }
+}
+function focusOn(lat, lng, id, group){
+  map.flyTo([lat, lng], Math.max(map.getZoom(), 18), { duration:0.6 });
+  var marker = group==='squad' ? squadMarkers[id] : waypointMarkers[id];
+  if(marker){
+    var el = marker.getElement();
+    var pinEl = el && (el.querySelector('.pin') || el.querySelector('.pin-custom'));
+    if(pinEl){ pinEl.classList.add('pulse-target'); setTimeout(function(){ pinEl.classList.remove('pulse-target'); }, 1400); }
+  }
+}
+function rowEl(name, coord, distStr, brngStr, lat, lng, id, group, deletable, color, hidden){
+  var row = document.createElement('div'); row.className='row';
+  if(hidden) row.style.opacity = '0.45';
+  var sw = document.createElement('div'); sw.className='swatch';
+  sw.style.background = color;
+  var main = document.createElement('div'); main.className='row-main';
+  main.innerHTML = '<div class="row-name">'+name+'</div><div class="row-coord">'+coord+'</div>';
+  var meta = document.createElement('div'); meta.className='row-meta';
+  meta.innerHTML = '<b>'+distStr+'</b>'+brngStr;
+  row.appendChild(sw); row.appendChild(main); row.appendChild(meta);
+  var isTracking = trackTarget && trackTarget.id===id && trackTarget.group===group;
+  var trackBtn = document.createElement('button'); trackBtn.className='row-del'; trackBtn.textContent = '📐';
+  trackBtn.style.marginLeft = '6px';
+  trackBtn.title = isTracking ? 'Parar de rastrear' : 'Rastrear (traçar linha)';
+  if(isTracking){ trackBtn.style.color = 'var(--you)'; trackBtn.style.borderColor = 'var(--you)'; }
+  trackBtn.addEventListener('click', function(ev){ ev.stopPropagation(); setTrack(id, group); });
+  row.appendChild(trackBtn);
+  if(deletable){
+    var eye = document.createElement('button'); eye.className='row-del'; eye.textContent = hidden ? '🚫' : '👁';
+    eye.title = hidden ? 'Mostrar no mapa' : 'Esconder do mapa';
+    eye.addEventListener('click', function(ev){ ev.stopPropagation(); toggleHidden(id); });
+    row.appendChild(eye);
+    var del = document.createElement('button'); del.className='row-del'; del.textContent='✕'; del.style.marginLeft='6px';
+    del.addEventListener('click', function(ev){ ev.stopPropagation(); if(confirm('Excluir ' + name + '?')) deleteWaypoint(id); });
+    row.appendChild(del);
+  }
+  row.addEventListener('click', function(){ focusOn(lat, lng, id, group); });
+  return row;
+}
+
+// ---------- modal de novo ponto ----------
+var ICONS = ['📍','🚩','💀','⚠️','🎯','🏥','📦','🔥'];
+var COLORS = ['#E85D24','#E8A23D','#D9553F','#5BB8E8','#7CB342','#9B6BD9','#D96BA8','#EDEAD8'];
+var selIcon = ICONS[0], selColor = COLORS[0], pendingLatLng = null;
+function renderChips(){
+  var iconsEl = document.getElementById('wp-icons'); iconsEl.innerHTML = '';
+  ICONS.forEach(function(ic){
+    var b = document.createElement('button'); b.type='button'; b.className = 'chip-icon' + (ic===selIcon?' selected':''); b.textContent = ic;
+    b.addEventListener('click', function(){ selIcon = ic; renderChips(); });
+    iconsEl.appendChild(b);
+  });
+  var colorsEl = document.getElementById('wp-colors'); colorsEl.innerHTML = '';
+  COLORS.forEach(function(c){
+    var b = document.createElement('button'); b.type='button'; b.className = 'chip-color' + (c===selColor?' selected':''); b.style.background = c;
+    b.addEventListener('click', function(){ selColor = c; renderChips(); });
+    colorsEl.appendChild(b);
+  });
+}
+function openWpModal(lat, lng, defaultName){
+  pendingLatLng = { lat:lat, lng:lng };
+  document.getElementById('wp-name').value = defaultName;
+  selIcon = ICONS[0]; selColor = COLORS[0];
+  renderChips();
+  document.getElementById('wp-modal').style.display = 'flex';
+}
+function closeWpModal(){ document.getElementById('wp-modal').style.display = 'none'; pendingLatLng = null; }
+document.getElementById('wp-cancel').addEventListener('click', closeWpModal);
+document.getElementById('wp-confirm').addEventListener('click', function(){
+  if(!pendingLatLng) return;
+  var name = document.getElementById('wp-name').value.trim() || ('PT-' + (Object.keys(waypoints).length + 1));
+  commitWaypoint(pendingLatLng.lat, pendingLatLng.lng, name, selIcon, selColor);
+  closeWpModal();
+  switchTab('points');
+});
+
+// ---------- comunicação ----------
+function addMessage(sender, text, audio, isMe){
+  messages.push({ sender:sender, text:text, audio:audio, isMe: !!isMe });
+  if(activeTab==='comms') renderChat();
+  else if(!isMe){
+    var t = document.querySelector('.tab[data-tab="comms"]');
+    if(t) t.classList.add('has-unread');
+  }
+}
+function renderChat(){
+  var log = document.getElementById('chat-log');
+  log.innerHTML = '';
+  messages.forEach(function(m){
+    var b = document.createElement('div'); b.className = 'msg ' + (m.isMe ? 'msg-me' : 'msg-them');
+    var html = '<div class="msg-sender">' + m.sender + '</div>';
+    if(m.text) html += '<div>' + m.text + '</div>';
+    if(m.audio) html += '<audio controls src="' + m.audio.url + '"></audio>';
+    b.innerHTML = html;
+    log.appendChild(b);
+  });
+  log.scrollTop = log.scrollHeight;
+}
+document.getElementById('chat-send').addEventListener('click', sendChat);
+document.getElementById('chat-input').addEventListener('keydown', function(e){ if(e.key==='Enter') sendChat(); });
+function sendChat(){
+  var input = document.getElementById('chat-input');
+  var val = input.value.trim();
+  if(!val) return;
+  input.value = '';
+  if(sb){
+    sb.from('messages').insert({ party_code:partyCode, sender: callsignEl().value || 'VOCÊ', body: val }).then(function(res){
+      if(res.error) addMessage(callsignEl().value || 'VOCÊ', val, null, true);
+    });
+  } else {
+    addMessage(callsignEl().value || 'VOCÊ', val, null, true);
+  }
+}
+
+var mediaRecorder, audioChunks=[], recording=false;
+function pickMimeType(){
+  var candidates = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/aac'];
+  for(var i=0; i<candidates.length; i++){
+    if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
+  }
+  return '';
+}
+function startRecording(){
+  if(recording) return;
+  navigator.mediaDevices.getUserMedia({ audio:true }).then(function(stream){
+    var mime = pickMimeType();
+    try{ mediaRecorder = mime ? new MediaRecorder(stream, { mimeType:mime }) : new MediaRecorder(stream); }
+    catch(e){ mediaRecorder = new MediaRecorder(stream); }
+    audioChunks = [];
+    mediaRecorder.ondataavailable = function(e){ if(e.data && e.data.size>0) audioChunks.push(e.data); };
+    mediaRecorder.start();
+    recording = true;
+    document.getElementById('ptt').classList.add('active');
+  }).catch(function(){
+    addMessage('Sistema', 'Permissão de microfone negada.', null, false);
+  });
+}
+function stopRecording(){
+  if(!recording || !mediaRecorder) return;
+  recording = false;
+  document.getElementById('ptt').classList.remove('active');
+  mediaRecorder.onstop = function(){
+    var mime = (mediaRecorder.mimeType || 'audio/webm').split(';')[0];
+    var ext = mime.indexOf('mp4') > -1 ? 'm4a' : (mime.indexOf('ogg') > -1 ? 'ogg' : (mime.indexOf('aac') > -1 ? 'aac' : 'webm'));
+    var blob = new Blob(audioChunks, { type: mime });
+    mediaRecorder.stream.getTracks().forEach(function(t){ t.stop(); });
+    if(blob.size === 0){ addMessage('Sistema', 'Gravação vazia, tente de novo.', null, false); return; }
+    var sender = callsignEl().value || 'VOCÊ';
+    if(!sb){ addMessage(sender, null, { url:URL.createObjectURL(blob) }, true); return; }
+    var path = partyCode + '/' + Date.now() + '-' + myId + '.' + ext;
+    sb.storage.from('audio').upload(path, blob, { contentType:mime }).then(function(res){
+      if(res.error){ addMessage('Sistema', 'Falha ao enviar áudio: ' + res.error.message, null, false); return; }
+      var pub = sb.storage.from('audio').getPublicUrl(path);
+      var url = pub.data.publicUrl;
+      sb.from('messages').insert({ party_code:partyCode, sender:sender, audio_url:url }).then(function(res2){
+        if(res2.error) addMessage(sender, null, { url:url }, true);
+      });
+    });
+  };
+  mediaRecorder.stop();
+}
+var pttBtn = document.getElementById('ptt');
+pttBtn.addEventListener('pointerdown', startRecording);
+pttBtn.addEventListener('pointerup', stopRecording);
+pttBtn.addEventListener('pointerleave', function(){ if(recording) stopRecording(); });
+
+// ---------- party ----------
+function renderParty(){
+  var list = document.getElementById('party-list');
+  list.innerHTML = '';
+  var mine = document.createElement('div'); mine.className='row'; mine.style.cursor='default';
+  mine.innerHTML = '<div class="swatch" style="background:var(--you)"></div><div class="row-main"><div class="row-name">'+(callsignEl().value||'VOCÊ')+' (você)</div></div>';
+  var mtag = document.createElement('span'); mtag.className='status-tag status-conectado'; mtag.textContent='Conectado';
+  mine.appendChild(mtag); list.appendChild(mine);
+
+  Object.keys(squad).forEach(function(id){
+    var s = squad[id];
+    var row = document.createElement('div'); row.className='row'; row.style.cursor='default';
+    row.innerHTML = '<div class="swatch" style="background:var(--squad)"></div><div class="row-main"><div class="row-name">'+s.name+'</div></div>';
+    var tag = document.createElement('span'); tag.className='status-tag status-conectado'; tag.textContent='Conectado';
+    row.appendChild(tag); list.appendChild(row);
+  });
+}
+document.getElementById('party-copy').addEventListener('click', function(){
+  var btn = this;
+  navigator.clipboard && navigator.clipboard.writeText(partyCode).then(function(){
+    btn.textContent = 'Copiado!'; setTimeout(function(){ btn.textContent = 'Copiar'; }, 1500);
+  });
+});
+document.getElementById('invite-btn').addEventListener('click', joinParty);
+document.getElementById('invite-input').addEventListener('keydown', function(e){ if(e.key==='Enter') joinParty(); });
+document.getElementById('join-name-input').addEventListener('keydown', function(e){ if(e.key==='Enter') joinParty(); });
+function joinParty(){
+  var nameInput = document.getElementById('join-name-input');
+  var newName = nameInput.value.trim();
+  if(newName){
+    callsignEl().value = newName;
+    localStorage.setItem('gridsix-callsign', newName);
+    youMarker.setIcon(iconYou(newName));
+    refreshYouConeRef();
+    nameInput.value = '';
+  }
+  var input = document.getElementById('invite-input');
+  var code = input.value.trim().toUpperCase();
+  if(code && code !== partyCode){
+    switchParty(code);
+    input.value = '';
+  } else if(newName){
+    pushMyPosition(true);
+  }
+}
+
+// ---------- ponte com o backend ----------
+var playersChannel = null, waypointsChannel = null, messagesChannel = null;
+
+function clearSquadMarkers(){
+  Object.keys(squadMarkers).forEach(function(id){ map.removeLayer(squadMarkers[id]); });
+  squadMarkers = {}; squad = {};
+}
+function clearWaypointMarkers(){
+  Object.keys(waypointMarkers).forEach(function(id){ map.removeLayer(waypointMarkers[id]); });
+  waypointMarkers = {}; waypoints = {};
+}
+
+function upsertSquadMember(row){
+  if(row.id === myId) return;
+  var prev = squad[row.id];
+  squad[row.id] = row;
+  if(squadMarkers[row.id]){
+    squadMarkers[row.id].setLatLng([row.lat, row.lng]);
+    if(!prev || prev.name !== row.name) squadMarkers[row.id].setIcon(icon('pin-squad', row.name));
+  } else {
+    squadMarkers[row.id] = L.marker([row.lat, row.lng], { icon: icon('pin-squad', row.name) }).addTo(map);
+  }
+  document.getElementById('status-text').textContent = (Object.keys(squad).length) + ' na malha';
+  if(trackTarget && trackTarget.group==='squad' && trackTarget.id===row.id) updateTrack();
+  if(activeTab==='squad' || activeTab==='party') renderList();
+}
+function removeSquadMember(id){
+  if(trackTarget && trackTarget.group==='squad' && trackTarget.id===id) clearTrack();
+  if(squadMarkers[id]){ map.removeLayer(squadMarkers[id]); delete squadMarkers[id]; }
+  delete squad[id];
+  document.getElementById('status-text').textContent = (Object.keys(squad).length) + ' na malha';
+  if(activeTab==='squad' || activeTab==='party') renderList();
+}
+function normalizeWaypoint(row){
+  row.icon = row.icon || '📍';
+  row.color = row.color || '#E85D24';
+  return row;
+}
+function upsertWaypointRow(row){
+  normalizeWaypoint(row);
+  waypoints[row.id] = row;
+  if(waypointMarkers[row.id]) map.removeLayer(waypointMarkers[row.id]);
+  waypointMarkers[row.id] = L.marker([row.lat, row.lng], { icon: iconWay(row) }).addTo(map);
+  updateWaypointVisibility(row.id);
+  if(trackTarget && trackTarget.group==='points' && trackTarget.id===row.id) updateTrack();
+  if(activeTab==='points') renderList();
+}
+function removeWaypointRow(id){
+  if(trackTarget && trackTarget.group==='points' && trackTarget.id===id) clearTrack();
+  if(waypointMarkers[id]){ map.removeLayer(waypointMarkers[id]); delete waypointMarkers[id]; }
+  delete waypoints[id];
+  if(hiddenPoints.has(id)){ hiddenPoints.delete(id); saveHidden(); }
+  if(activeTab==='points') renderList();
+}
+function commitWaypoint(lat, lng, label, iconCh, color){
+  if(sb){
+    sb.from('waypoints').insert({ party_code:partyCode, label:label, lat:lat, lng:lng, icon:iconCh, color:color }).select().then(function(res){
+      if(res.data && res.data[0]) upsertWaypointRow(res.data[0]);
+      else if(res.error) upsertWaypointRow({ id:'w'+Date.now(), label:label, lat:lat, lng:lng, icon:iconCh, color:color });
+    });
+  } else {
+    upsertWaypointRow({ id:'w'+Date.now(), label:label, lat:lat, lng:lng, icon:iconCh, color:color });
+  }
+}
+function deleteWaypoint(id){
+  removeWaypointRow(id);
+  if(sb) sb.from('waypoints').delete().eq('id', id).then(function(){});
+}
+
+// ---------- KML ----------
+function xmlEscape(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function exportKML(){
+  var ids = Object.keys(waypoints);
+  if(ids.length === 0){ alert('Nenhum ponto pra exportar ainda.'); return; }
+  var placemarks = ids.map(function(id){
+    var w = waypoints[id];
+    return '<Placemark><name>' + xmlEscape(w.label) + '</name><Point><coordinates>' + w.lng + ',' + w.lat + ',0</coordinates></Point></Placemark>';
+  }).join('\n');
+  var kml = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Grid Six - ' + xmlEscape(partyCode) + '</name>\n' + placemarks + '\n</Document></kml>';
+  var blob = new Blob([kml], { type:'application/vnd.google-earth.kml+xml' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'grid-six-' + partyCode + '.kml';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
+}
+function importKMLFile(file){
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var count = 0;
+    try{
+      var xml = new DOMParser().parseFromString(e.target.result, 'text/xml');
+      if(xml.getElementsByTagName('parsererror').length) throw new Error('parse');
+      var placemarks = xml.getElementsByTagName('Placemark');
+      for(var i=0; i<placemarks.length; i++){
+        var pm = placemarks[i];
+        var coordsEl = pm.getElementsByTagName('coordinates')[0];
+        if(!coordsEl || !coordsEl.textContent) continue;
+        var parts = coordsEl.textContent.trim().split(',');
+        var lng = parseFloat(parts[0]), lat = parseFloat(parts[1]);
+        if(isNaN(lat) || isNaN(lng)) continue;
+        var nameEl = pm.getElementsByTagName('name')[0];
+        var label = (nameEl && nameEl.textContent.trim()) || ('PT-' + (Object.keys(waypoints).length + count + 1));
+        commitWaypoint(lat, lng, label, '📍', '#E85D24');
+        count++;
+      }
+    } catch(err){
+      alert('Não consegui ler esse arquivo. Confirma que é um .kml válido.');
+      return;
+    }
+    if(count === 0) alert('Não encontrei pontos nesse arquivo KML.');
+    else { switchTab('points'); }
+  };
+  reader.readAsText(file);
+}
+document.getElementById('kml-input').addEventListener('change', function(e){
+  var f = e.target.files && e.target.files[0];
+  if(f) importKMLFile(f);
+  this.value = '';
+});
+
+var lastPush = 0;
+function pushMyPosition(force){
+  if(!sb) return;
+  var now = Date.now();
+  if(!force && now - lastPush < 2500) return;
+  lastPush = now;
+  sb.from('players').upsert({
+    id:myId, party_code:partyCode, name: callsignEl().value || 'VOCÊ',
+    lat:you.lat, lng:you.lng, heading:youHeading, updated_at:new Date().toISOString()
+  }).then(function(res){
+    setSyncStatus(!res.error, res.error ? 'sem conexão' : (Object.keys(squad).length) + ' na malha');
+  });
+}
+setInterval(function(){ pushMyPosition(); }, 3000);
+
+function loadPartyData(){
+  if(!sb) return;
+  sb.from('players').select('*').eq('party_code', partyCode).then(function(res){
+    (res.data || []).forEach(upsertSquadMember);
+  });
+  sb.from('waypoints').select('*').eq('party_code', partyCode).then(function(res){
+    (res.data || []).forEach(upsertWaypointRow);
+  });
+  sb.from('messages').select('*').eq('party_code', partyCode).order('created_at', { ascending:true }).limit(50).then(function(res){
+    (res.data || []).forEach(function(m){
+      addMessage(m.sender, m.body, m.audio_url ? { url:m.audio_url } : null, m.sender === (callsignEl().value || 'VOCÊ'));
+    });
+  });
+}
+
+function subscribeParty(){
+  if(playersChannel) sb.removeChannel(playersChannel);
+  if(waypointsChannel) sb.removeChannel(waypointsChannel);
+  if(messagesChannel) sb.removeChannel(messagesChannel);
+
+  playersChannel = sb.channel('players-' + partyCode)
+    .on('postgres_changes', { event:'*', schema:'public', table:'players', filter:'party_code=eq.' + partyCode }, function(payload){
+      if(payload.eventType === 'DELETE'){ removeSquadMember(payload.old.id); return; }
+      if(payload.new.id === myId) return;
+      upsertSquadMember(payload.new);
+    }).subscribe(function(status){ setSyncStatus(status==='SUBSCRIBED', status==='SUBSCRIBED' ? (Object.keys(squad).length)+' na malha' : 'conectando…'); });
+
+  waypointsChannel = sb.channel('waypoints-' + partyCode)
+    .on('postgres_changes', { event:'*', schema:'public', table:'waypoints', filter:'party_code=eq.' + partyCode }, function(payload){
+      if(payload.eventType === 'DELETE') removeWaypointRow(payload.old.id);
+      else upsertWaypointRow(payload.new);
+    }).subscribe();
+
+  messagesChannel = sb.channel('messages-' + partyCode)
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages', filter:'party_code=eq.' + partyCode }, function(payload){
+      var m = payload.new;
+      addMessage(m.sender, m.body, m.audio_url ? { url:m.audio_url } : null, m.sender === (callsignEl().value || 'VOCÊ'));
+    }).subscribe();
+}
+
+function switchParty(code){
+  partyCode = code;
+  localStorage.setItem('gridsix-party-code', partyCode);
+  document.getElementById('party-code-val').textContent = partyCode;
+  clearSquadMarkers(); clearWaypointMarkers();
+  messages = [];
+  clearTrack();
+  if(sb){ loadPartyData(); subscribeParty(); pushMyPosition(true); }
+  renderList();
+}
+
+// remove jogadores que sumiram há mais de 40s (fecharam o app)
+setInterval(function(){
+  var now = Date.now();
+  Object.keys(squad).forEach(function(id){
+    var t = new Date(squad[id].updated_at).getTime();
+    if(now - t > 40000) removeSquadMember(id);
+  });
+}, 10000);
+
+function startPartySync(){
+  if(sb){
+    loadPartyData();
+    subscribeParty();
+    pushMyPosition(true);
+  } else {
+    setSyncStatus(false, 'backend indisponível');
+  }
+}
+
+// ---------- contas, amigos e presença online ----------
+var session = null;
+var myProfile = null;
+var guestMode = localStorage.getItem('gridsix-guest') === '1';
+var friends = {};
+var incomingRequests = {};
+var onlineFriends = {};
+var presenceChannel = null, friendsChannel = null, invitesChannel = null;
+
+function showAuthGate(){ document.getElementById('auth-gate').style.display = 'flex'; }
+function hideAuthGate(){ document.getElementById('auth-gate').style.display = 'none'; }
+
+var authMode = 'login';
+document.querySelectorAll('#auth-tabs .tab').forEach(function(t){
+  t.addEventListener('click', function(){
+    authMode = t.dataset.mode;
+    document.querySelectorAll('#auth-tabs .tab').forEach(function(x){ x.classList.toggle('active', x===t); });
+    document.getElementById('auth-callsign').style.display = authMode==='signup' ? 'block' : 'none';
+    document.getElementById('auth-submit').textContent = authMode==='signup' ? 'Criar conta' : 'Entrar';
+    document.getElementById('auth-error').textContent = '';
+  });
+});
+document.getElementById('auth-submit').addEventListener('click', function(){
+  if(!sb) return;
+  var email = document.getElementById('auth-email').value.trim();
+  var pass = document.getElementById('auth-password').value;
+  var cs = document.getElementById('auth-callsign').value.trim();
+  var errEl = document.getElementById('auth-error');
+  errEl.textContent = '';
+  if(!email || !pass){ errEl.textContent = 'Preencha e-mail e senha.'; return; }
+  if(authMode === 'signup'){
+    if(!cs){ errEl.textContent = 'Escolha um nome de operador.'; return; }
+    sb.auth.signUp({ email:email, password:pass }).then(function(res){
+      if(res.error){ errEl.textContent = res.error.message; return; }
+      var user = res.data && res.data.user;
+      if(!user){ errEl.textContent = 'Algo deu errado, tente de novo.'; return; }
+      sb.from('profiles').insert({ id:user.id, callsign:cs }).then(function(){
+        if(res.data.session) onAuthSuccess(res.data.session, { id:user.id, callsign:cs });
+        else errEl.textContent = 'Conta criada! Confirme seu e-mail e depois toque em Entrar.';
+      });
+    });
+  } else {
+    sb.auth.signInWithPassword({ email:email, password:pass }).then(function(res){
+      if(res.error){ errEl.textContent = res.error.message; return; }
+      loadProfileAndEnter(res.data.session);
+    });
+  }
+});
+document.getElementById('auth-skip').addEventListener('click', function(){
+  guestMode = true;
+  localStorage.setItem('gridsix-guest', '1');
+  hideAuthGate();
+  startPartySync();
+});
+
+function loadProfileAndEnter(sess){
+  sb.from('profiles').select('*').eq('id', sess.user.id).single().then(function(res){
+    onAuthSuccess(sess, res.data || { id:sess.user.id, callsign: callsignEl().value || 'VOCÊ' });
+  });
+}
+function onAuthSuccess(sess, profile){
+  session = sess; myProfile = profile;
+  myId = profile.id;
+  localStorage.setItem('gridsix-player-id', myId);
+  guestMode = false;
+  localStorage.removeItem('gridsix-guest');
+  if(profile.callsign){
+    callsignEl().value = profile.callsign;
+    localStorage.setItem('gridsix-callsign', profile.callsign);
+    youMarker.setIcon(iconYou(profile.callsign));
+    refreshYouConeRef();
+  }
+  hideAuthGate();
+  renderAccountFooter();
+  startPartySync();
+  joinPresence();
+  loadFriends();
+  subscribeFriends();
+  subscribeInvites();
+}
+function renderAccountFooter(){
+  var el = document.getElementById('account-footer');
+  if(!session){ el.innerHTML = ''; return; }
+  el.innerHTML = '<button id="logout-btn">Sair da conta</button>';
+  document.getElementById('logout-btn').addEventListener('click', function(){
+    sb.auth.signOut().then(function(){ location.reload(); });
+  });
+}
+
+// ---------- amigos ----------
+function loadFriends(){
+  if(!session) return;
+  sb.from('friends').select('*').or('user_id.eq.' + session.user.id + ',friend_id.eq.' + session.user.id).then(function(res){
+    friends = {}; incomingRequests = {};
+    (res.data || []).forEach(function(f){
+      var otherId = f.user_id === session.user.id ? f.friend_id : f.user_id;
+      if(f.status === 'accepted'){ friends[otherId] = { id:otherId }; }
+      else if(f.status === 'pending' && f.friend_id === session.user.id){ incomingRequests[f.id] = { id:f.id, fromId:f.user_id }; }
+    });
+    var ids = Object.keys(friends).concat(Object.keys(incomingRequests).map(function(k){ return incomingRequests[k].fromId; }));
+    if(ids.length === 0){ renderFriends(); return; }
+    sb.from('profiles').select('*').in('id', ids).then(function(pres){
+      (pres.data || []).forEach(function(p){
+        if(friends[p.id]) friends[p.id].callsign = p.callsign;
+        Object.keys(incomingRequests).forEach(function(k){ if(incomingRequests[k].fromId === p.id) incomingRequests[k].callsign = p.callsign; });
+      });
+      renderFriends();
+    });
+  });
+}
+function subscribeFriends(){
+  if(!session) return;
+  if(friendsChannel) sb.removeChannel(friendsChannel);
+  friendsChannel = sb.channel('friends-' + session.user.id)
+    .on('postgres_changes', { event:'*', schema:'public', table:'friends' }, function(payload){
+      var row = payload.new || payload.old;
+      if(row && (row.user_id === session.user.id || row.friend_id === session.user.id)) loadFriends();
+    }).subscribe();
+}
+document.getElementById('friend-search-btn').addEventListener('click', searchFriend);
+document.getElementById('friend-search').addEventListener('keydown', function(e){ if(e.key==='Enter') searchFriend(); });
+function searchFriend(){
+  var q = document.getElementById('friend-search').value.trim();
+  var resultEl = document.getElementById('friend-search-result');
+  resultEl.innerHTML = '';
+  if(!q || !session || !sb) return;
+  sb.from('profiles').select('*').ilike('callsign', '%' + q + '%').neq('id', session.user.id).limit(6).then(function(res){
+    (res.data || []).forEach(function(p){
+      var row = document.createElement('div'); row.className = 'row'; row.style.cursor = 'default';
+      row.innerHTML = '<div class="row-main"><div class="row-name">' + p.callsign + '</div></div>';
+      var already = friends[p.id];
+      var btn = document.createElement('button'); btn.className = 'row-del'; btn.style.width = 'auto'; btn.style.padding = '0 10px';
+      btn.textContent = already ? 'Amigo' : '+ Adicionar';
+      if(already) btn.disabled = true;
+      btn.addEventListener('click', function(){
+        sb.from('friends').insert({ user_id:session.user.id, friend_id:p.id, status:'pending' }).then(function(res2){
+          if(!res2.error){ btn.textContent = 'Pedido enviado'; btn.disabled = true; }
+        });
+      });
+      row.appendChild(btn); resultEl.appendChild(row);
+    });
+    if((res.data || []).length === 0) resultEl.innerHTML = '<div class="empty">Ninguém encontrado com esse nome.</div>';
+  });
+}
+function respondRequest(reqId, accept){
+  if(accept) sb.from('friends').update({ status:'accepted' }).eq('id', reqId).then(loadFriends);
+  else sb.from('friends').delete().eq('id', reqId).then(loadFriends);
+}
+function renderFriends(){
+  var list = document.getElementById('friends-list');
+  list.innerHTML = '';
+  if(!session){
+    list.innerHTML = '<div class="empty">Crie uma conta ou entre pra ter uma lista de amigos fixa e convidar quem estiver online.</div>';
+    return;
+  }
+  var reqIds = Object.keys(incomingRequests);
+  if(reqIds.length){
+    var h = document.createElement('div'); h.className = 'modal-label'; h.style.margin = '0 0 4px'; h.textContent = 'Pedidos recebidos';
+    list.appendChild(h);
+    reqIds.forEach(function(rid){
+      var r = incomingRequests[rid];
+      var row = document.createElement('div'); row.className = 'row'; row.style.cursor = 'default';
+      row.innerHTML = '<div class="row-main"><div class="row-name">' + (r.callsign || '...') + '</div></div>';
+      var accept = document.createElement('button'); accept.className = 'row-del'; accept.textContent = '✓'; accept.style.color = 'var(--ok)';
+      accept.addEventListener('click', function(){ respondRequest(rid, true); });
+      var decline = document.createElement('button'); decline.className = 'row-del'; decline.style.marginLeft = '6px'; decline.textContent = '✕';
+      decline.addEventListener('click', function(){ respondRequest(rid, false); });
+      row.appendChild(accept); row.appendChild(decline);
+      list.appendChild(row);
+    });
+  }
+  var fh = document.createElement('div'); fh.className = 'modal-label'; fh.textContent = 'Amigos';
+  list.appendChild(fh);
+  var fids = Object.keys(friends);
+  if(fids.length === 0){
+    var e = document.createElement('div'); e.className = 'empty'; e.textContent = 'Nenhum amigo ainda. Busque pelo nome de operador acima.';
+    list.appendChild(e);
+  }
+  fids.forEach(function(fid){
+    var f = friends[fid];
+    var online = !!onlineFriends[fid];
+    var row = document.createElement('div'); row.className = 'row'; row.style.cursor = 'default';
+    var sw = document.createElement('div'); sw.className = 'swatch'; sw.style.background = online ? 'var(--ok)' : 'var(--text-muted)';
+    var main = document.createElement('div'); main.className = 'row-main';
+    main.innerHTML = '<div class="row-name">' + (f.callsign || '...') + '</div><div class="row-coord">' + (online ? 'Online' : 'Offline') + '</div>';
+    row.appendChild(sw); row.appendChild(main);
+    if(online){
+      var inv = document.createElement('button'); inv.className = 'row-del'; inv.style.width = 'auto'; inv.style.padding = '0 10px'; inv.style.color = 'var(--you)';
+      inv.textContent = 'Convidar';
+      inv.addEventListener('click', function(){ inviteFriend(fid); });
+      row.appendChild(inv);
+    }
+    list.appendChild(row);
+  });
+}
+
+// ---------- presença online ----------
+function joinPresence(){
+  if(!sb || !session) return;
+  presenceChannel = sb.channel('online-users', { config:{ presence:{ key:session.user.id } } });
+  presenceChannel.on('presence', { event:'sync' }, function(){
+    var state = presenceChannel.presenceState();
+    onlineFriends = {};
+    Object.keys(state).forEach(function(uid){ onlineFriends[uid] = true; });
+    if(activeTab === 'friends') renderFriends();
+  }).subscribe(function(status){
+    if(status === 'SUBSCRIBED') presenceChannel.track({ callsign: myProfile.callsign, online_at:new Date().toISOString() });
+  });
+}
+
+// ---------- convites de party ----------
+function inviteFriend(friendId){
+  sb.from('party_invites').insert({ from_user:session.user.id, to_user:friendId, party_code:partyCode, status:'pending' }).then(function(res){
+    if(!res.error) alert('Convite enviado!');
+  });
+}
+function subscribeInvites(){
+  if(!sb || !session) return;
+  invitesChannel = sb.channel('invites-' + session.user.id)
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'party_invites', filter:'to_user=eq.' + session.user.id }, function(payload){
+      showIncomingInvite(payload.new);
+    }).subscribe();
+}
+function showIncomingInvite(inv){
+  sb.from('profiles').select('callsign').eq('id', inv.from_user).single().then(function(res){
+    var name = (res.data && res.data.callsign) || 'Alguém';
+    if(confirm(name + ' te convidou pra party ' + inv.party_code + '. Entrar agora?')){
+      sb.from('party_invites').update({ status:'accepted' }).eq('id', inv.id).then(function(){});
+      switchParty(inv.party_code);
+    } else {
+      sb.from('party_invites').update({ status:'declined' }).eq('id', inv.id).then(function(){});
+    }
+  });
+}
+
+// ---------- resolve o estado inicial (logado, convidado, ou pede login) ----------
+if(sb){
+  sb.auth.getSession().then(function(res){
+    var sess = res.data && res.data.session;
+    if(sess){ loadProfileAndEnter(sess); }
+    else if(guestMode){ hideAuthGate(); startPartySync(); }
+    else { showAuthGate(); }
+  });
+} else {
+  hideAuthGate();
+  startPartySync();
+}
+
+// ---------- abas ----------
+function switchTab(tab){
+  activeTab = tab;
+  document.querySelectorAll('#tabs .tab').forEach(function(t){ t.classList.toggle('active', t.dataset.tab===tab); });
+  if(tab==='comms'){
+    var t = document.querySelector('.tab[data-tab="comms"]');
+    if(t) t.classList.remove('has-unread');
+  }
+  renderList();
+}
+document.querySelectorAll('#tabs .tab').forEach(function(t){ t.addEventListener('click', function(){ switchTab(t.dataset.tab); }); });
+
+// ---------- formato ----------
+document.getElementById('fmt-toggle').addEventListener('click', function(){
+  fmt = fmt==='gps' ? 'mgrs' : 'gps';
+  this.textContent = fmt.toUpperCase();
+  renderList();
+});
+
+// ---------- callsign ----------
+callsignEl().addEventListener('input', function(){
+  youMarker.setIcon(iconYou(this.value || 'VOCÊ'));
+  refreshYouConeRef();
+  localStorage.setItem('gridsix-callsign', this.value || 'VOCÊ');
+  pushMyPosition(true);
+  if(session) sb.from('profiles').update({ callsign:this.value || 'VOCÊ' }).eq('id', session.user.id).then(function(){});
+});
+
+// ---------- adicionar ponto manual (GPS ou MGRS) ----------
+document.getElementById('add-btn').addEventListener('click', addManualPoint);
+document.getElementById('mgrs-input').addEventListener('keydown', function(e){ if(e.key==='Enter') addManualPoint(); });
+function addManualPoint(){
+  var input = document.getElementById('mgrs-input');
+  var val = input.value.trim();
+  if(!val) return;
+  var lat, lng;
+  if(val.indexOf(',') > -1){
+    var parts = val.split(',').map(function(p){ return parseFloat(p.trim()); });
+    lat = parts[0]; lng = parts[1];
+  } else {
+    try{ var p = fromMGRS(val); lat = p.lat; lng = p.lng; } catch(e){ lat = null; }
+  }
+  if(lat==null || isNaN(lat) || isNaN(lng)){
+    input.style.borderColor = 'var(--way)';
+    setTimeout(function(){ input.style.borderColor = 'var(--border)'; }, 900);
+    return;
+  }
+  input.value = '';
+  map.panTo([lat,lng]);
+  openWpModal(lat, lng, 'PT-' + (Object.keys(waypoints).length + 1));
+}
+
+renderList();
+})();
+</script>
+</body>
+</html>
