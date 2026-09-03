@@ -507,7 +507,7 @@ function applyHeading(){
 }
 function setHeading(deg){
   var raw = ((deg % 360) + 360) % 360;
-  youHeading = (raw + 180) % 360; // corrige o cone que apontava invertido
+  youHeading = raw;
   if(!youConeEl) refreshYouConeRef(); else applyHeading();
   var btn = document.getElementById('compass-btn');
   if(btn.classList.contains('on')) btn.textContent = Math.round(raw) + '°';
