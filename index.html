@@ -70,6 +70,13 @@
   }
   #banner b{color:var(--text-primary); font-weight:500;}
   #banner button{background:none; border:none; color:var(--text-muted); font-size:16px; line-height:1; margin-left:auto; padding:0 2px;}
+  #track-chip{
+    position:absolute; top:56px; left:12px; right:12px; z-index:498;
+    background:var(--panel); border:0.5px solid var(--you); border-radius:8px;
+    padding:8px 12px; font-size:12px; color:var(--text-primary); display:none; align-items:center; gap:8px;
+  }
+  #track-chip b{font-weight:600;}
+  #track-chip button{background:none; border:none; color:var(--text-muted); font-size:16px; line-height:1; margin-left:auto; padding:0 2px;}
 
   /* marcadores */
   .pin{width:26px; height:26px; border-radius:50%; border:3px solid var(--bg); box-shadow:0 0 0 2px currentColor;}
@@ -281,6 +288,7 @@
 </div>
 
 <div id="maphint">Toque no mapa para posicionar o ponto</div>
+<div id="track-chip"></div>
 <button id="locate-btn" title="Me localizar">🎯</button>
 <button id="layer-toggle" title="Alternar mapa/satélite">🛰️</button>
 <button id="add-point-btn" title="Adicionar ponto">📍</button>
@@ -489,6 +497,44 @@ function setHeading(deg){
 var youMarker = L.marker([you.lat, you.lng], { icon: iconYou(callsignEl().value) }).addTo(map);
 refreshYouConeRef();
 
+// ---------- rastreamento (linha até jogador/ponto) ----------
+var trackTarget = null; // { id, group }
+var trackLine = null;
+function targetLatLng(t){
+  if(!t) return null;
+  if(t.group === 'squad'){ var s = squad[t.id]; return s ? [s.lat, s.lng] : null; }
+  var w = waypoints[t.id]; return w ? [w.lat, w.lng] : null;
+}
+function targetLabel(t){
+  if(!t) return '';
+  if(t.group === 'squad'){ var s = squad[t.id]; return s ? s.name : ''; }
+  var w = waypoints[t.id]; return w ? (w.icon + ' ' + w.label) : '';
+}
+function updateTrack(){
+  var chip = document.getElementById('track-chip');
+  if(!trackTarget){ if(trackLine){ map.removeLayer(trackLine); trackLine = null; } chip.style.display = 'none'; return; }
+  var tll = targetLatLng(trackTarget);
+  if(!tll){ clearTrack(); return; }
+  var latlngs = [[you.lat, you.lng], tll];
+  if(trackLine) trackLine.setLatLngs(latlngs);
+  else trackLine = L.polyline(latlngs, { color:'#EDEAD8', weight:2, dashArray:'7,7', opacity:.85 }).addTo(map);
+  var db = distBearing(you.lat, you.lng, tll[0], tll[1]);
+  chip.innerHTML = '📐 Rastreando <b>' + targetLabel(trackTarget) + '</b> — ' + db.dist + ' m · ' + db.brng + '°<button id="track-stop">✕</button>';
+  chip.style.display = 'flex';
+  document.getElementById('track-stop').addEventListener('click', clearTrack);
+}
+function setTrack(id, group){
+  if(trackTarget && trackTarget.id === id && trackTarget.group === group){ clearTrack(); return; }
+  trackTarget = { id:id, group:group };
+  updateTrack();
+  if(activeTab==='squad' || activeTab==='points') renderList();
+}
+function clearTrack(){
+  trackTarget = null;
+  updateTrack();
+  if(activeTab==='squad' || activeTab==='points') renderList();
+}
+
 var squadMarkers = {};
 var waypointMarkers = {};
 
@@ -547,6 +593,7 @@ if(navigator.geolocation){
     youMarker.setLatLng([you.lat, you.lng]);
     if(!you._centered){ map.setView([you.lat, you.lng], 17); you._centered = true; }
     if(activeTab==='squad') renderList();
+    updateTrack();
     pushMyPosition();
   }, function(){ /* permissão negada: fica no centro padrão */ }, { enableHighAccuracy:true, maximumAge:2000 });
 }
@@ -687,6 +734,13 @@ function rowEl(name, coord, distStr, brngStr, lat, lng, id, group, deletable, co
   var meta = document.createElement('div'); meta.className='row-meta';
   meta.innerHTML = '<b>'+distStr+'</b>'+brngStr;
   row.appendChild(sw); row.appendChild(main); row.appendChild(meta);
+  var isTracking = trackTarget && trackTarget.id===id && trackTarget.group===group;
+  var trackBtn = document.createElement('button'); trackBtn.className='row-del'; trackBtn.textContent = '📐';
+  trackBtn.style.marginLeft = '6px';
+  trackBtn.title = isTracking ? 'Parar de rastrear' : 'Rastrear (traçar linha)';
+  if(isTracking){ trackBtn.style.color = 'var(--you)'; trackBtn.style.borderColor = 'var(--you)'; }
+  trackBtn.addEventListener('click', function(ev){ ev.stopPropagation(); setTrack(id, group); });
+  row.appendChild(trackBtn);
   if(deletable){
     var eye = document.createElement('button'); eye.className='row-del'; eye.textContent = hidden ? '🚫' : '👁';
     eye.title = hidden ? 'Mostrar no mapa' : 'Esconder do mapa';
@@ -894,9 +948,11 @@ function upsertSquadMember(row){
     squadMarkers[row.id] = L.marker([row.lat, row.lng], { icon: icon('pin-squad', row.name) }).addTo(map);
   }
   document.getElementById('status-text').textContent = (Object.keys(squad).length) + ' na malha';
+  if(trackTarget && trackTarget.group==='squad' && trackTarget.id===row.id) updateTrack();
   if(activeTab==='squad' || activeTab==='party') renderList();
 }
 function removeSquadMember(id){
+  if(trackTarget && trackTarget.group==='squad' && trackTarget.id===id) clearTrack();
   if(squadMarkers[id]){ map.removeLayer(squadMarkers[id]); delete squadMarkers[id]; }
   delete squad[id];
   document.getElementById('status-text').textContent = (Object.keys(squad).length) + ' na malha';
@@ -913,9 +969,11 @@ function upsertWaypointRow(row){
   if(waypointMarkers[row.id]) map.removeLayer(waypointMarkers[row.id]);
   waypointMarkers[row.id] = L.marker([row.lat, row.lng], { icon: iconWay(row) }).addTo(map);
   updateWaypointVisibility(row.id);
+  if(trackTarget && trackTarget.group==='points' && trackTarget.id===row.id) updateTrack();
   if(activeTab==='points') renderList();
 }
 function removeWaypointRow(id){
+  if(trackTarget && trackTarget.group==='points' && trackTarget.id===id) clearTrack();
   if(waypointMarkers[id]){ map.removeLayer(waypointMarkers[id]); delete waypointMarkers[id]; }
   delete waypoints[id];
   if(hiddenPoints.has(id)){ hiddenPoints.delete(id); saveHidden(); }
@@ -997,6 +1055,7 @@ function switchParty(code){
   document.getElementById('party-code-val').textContent = partyCode;
   clearSquadMarkers(); clearWaypointMarkers();
   messages = [];
+  clearTrack();
   if(sb){ loadPartyData(); subscribeParty(); pushMyPosition(true); }
   renderList();
 }
