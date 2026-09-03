@@ -517,7 +517,7 @@ function updateTrack(){
   if(!tll){ clearTrack(); return; }
   var latlngs = [[you.lat, you.lng], tll];
   if(trackLine) trackLine.setLatLngs(latlngs);
-  else trackLine = L.polyline(latlngs, { color:'#EDEAD8', weight:2, dashArray:'7,7', opacity:.85 }).addTo(map);
+  else trackLine = L.polyline(latlngs, { color:'#FF3B30', weight:3, dashArray:'9,7', opacity:.95 }).addTo(map);
   var db = distBearing(you.lat, you.lng, tll[0], tll[1]);
   chip.innerHTML = '📐 Rastreando <b>' + targetLabel(trackTarget) + '</b> — ' + db.dist + ' m · ' + db.brng + '°<button id="track-stop">✕</button>';
   chip.style.display = 'flex';
