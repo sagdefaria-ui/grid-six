@@ -247,6 +247,26 @@
     width:100%; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
     color:var(--text-primary); font-family:var(--sans); font-size:14px; padding:9px 10px;
   }
+  .modal-input{
+    width:100%; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
+    color:var(--text-primary); font-family:var(--sans); font-size:14px; padding:9px 10px; margin-bottom:8px;
+  }
+  #auth-gate{ z-index:1000; }
+  #auth-gate .modal-card{ width:min(340px,100%); }
+  #auth-tabs .tab.active{ background:var(--you); border-color:var(--you); color:#062033; }
+  #auth-error{ color:var(--danger); font-size:12px; min-height:16px; margin-bottom:2px; }
+  #auth-skip{ width:100%; margin-top:12px; background:none; border:none; color:var(--text-muted); font-size:12px; padding:6px; }
+  #friends-panel{display:none; flex-direction:column; flex:1; min-height:0;}
+  #friend-search-bar{display:flex; gap:8px; padding:0 14px 8px; flex-shrink:0;}
+  #friend-search-bar input{
+    flex:1; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
+    color:var(--text-primary); font-family:var(--sans); font-size:13px; padding:9px 10px; min-width:0;
+  }
+  #friend-search-bar button{background:var(--you); color:#062033; border:none; border-radius:8px; padding:0 14px; font-weight:600; font-size:13px;}
+  #friend-search-result{padding:0 14px; flex-shrink:0;}
+  #friends-list{overflow-y:auto; padding:0 14px 10px; flex:1;}
+  #account-footer{padding:8px 14px 12px; flex-shrink:0; text-align:center;}
+  #account-footer button{background:none; border:none; color:var(--text-muted); font-size:11px; text-decoration:underline;}
   .chip-row{display:flex; flex-wrap:wrap; gap:8px;}
   .chip-icon{
     width:38px; height:38px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--border);
@@ -300,6 +320,24 @@
 <button id="add-point-btn" title="Adicionar ponto">📍</button>
 <button id="immersive-btn" title="Esconder menus">⛶</button>
 
+<div id="auth-gate" class="modal-overlay" style="display:flex; background:rgba(11,13,8,.97);">
+  <div class="modal-card">
+    <div class="modal-title">Grid Six</div>
+    <div class="chip-row" id="auth-tabs" style="margin-bottom:12px">
+      <button type="button" class="tab active" data-mode="login">Entrar</button>
+      <button type="button" class="tab" data-mode="signup">Criar conta</button>
+    </div>
+    <input id="auth-callsign" class="modal-input" placeholder="Seu nome de operador" style="display:none">
+    <input id="auth-email" class="modal-input" placeholder="E-mail" type="email" autocapitalize="off">
+    <input id="auth-password" class="modal-input" placeholder="Senha" type="password">
+    <div id="auth-error"></div>
+    <div class="modal-actions">
+      <button id="auth-submit" style="flex:none; width:100%">Entrar</button>
+    </div>
+    <button id="auth-skip">Continuar sem conta</button>
+  </div>
+</div>
+
 <div id="sheet">
   <div id="grip"></div>
   <div id="tabs">
@@ -307,6 +345,7 @@
     <button class="tab" data-tab="points">Pontos</button>
     <button class="tab" data-tab="comms">Comunicação<span class="unread-dot"></span></button>
     <button class="tab" data-tab="party">Party</button>
+    <button class="tab" data-tab="friends">Amigos</button>
   </div>
 
   <div id="list"></div>
@@ -340,6 +379,16 @@
       </div>
     </div>
     <div id="party-hint">Compartilhe o código acima com seu esquadrão — quem digitar o mesmo código se conecta com você em tempo real.</div>
+  </div>
+
+  <div id="friends-panel">
+    <div id="friend-search-bar">
+      <input id="friend-search" placeholder="Buscar por nome de operador">
+      <button id="friend-search-btn">Buscar</button>
+    </div>
+    <div id="friend-search-result"></div>
+    <div id="friends-list"></div>
+    <div id="account-footer"></div>
   </div>
 </div>
 
@@ -738,9 +787,11 @@ function renderList(){
   document.getElementById('addbar').style.display = activeTab==='points' ? 'flex' : 'none';
   document.getElementById('comms-panel').style.display = activeTab==='comms' ? 'flex' : 'none';
   document.getElementById('party-panel').style.display = activeTab==='party' ? 'flex' : 'none';
+  document.getElementById('friends-panel').style.display = activeTab==='friends' ? 'flex' : 'none';
   list.style.display = (activeTab==='squad' || activeTab==='points') ? 'block' : 'none';
   if(activeTab === 'comms'){ renderChat(); return; }
   if(activeTab === 'party'){ renderParty(); return; }
+  if(activeTab === 'friends'){ renderFriends(); return; }
 
   list.innerHTML = '';
   if(activeTab === 'squad'){
@@ -1193,25 +1244,275 @@ setInterval(function(){
   });
 }, 10000);
 
+function startPartySync(){
+  if(sb){
+    loadPartyData();
+    subscribeParty();
+    pushMyPosition(true);
+  } else {
+    setSyncStatus(false, 'backend indisponível');
+  }
+}
+
+// ---------- contas, amigos e presença online ----------
+var session = null;
+var myProfile = null;
+var guestMode = localStorage.getItem('gridsix-guest') === '1';
+var friends = {};
+var incomingRequests = {};
+var onlineFriends = {};
+var presenceChannel = null, friendsChannel = null, invitesChannel = null;
+
+function showAuthGate(){ document.getElementById('auth-gate').style.display = 'flex'; }
+function hideAuthGate(){ document.getElementById('auth-gate').style.display = 'none'; }
+
+var authMode = 'login';
+document.querySelectorAll('#auth-tabs .tab').forEach(function(t){
+  t.addEventListener('click', function(){
+    authMode = t.dataset.mode;
+    document.querySelectorAll('#auth-tabs .tab').forEach(function(x){ x.classList.toggle('active', x===t); });
+    document.getElementById('auth-callsign').style.display = authMode==='signup' ? 'block' : 'none';
+    document.getElementById('auth-submit').textContent = authMode==='signup' ? 'Criar conta' : 'Entrar';
+    document.getElementById('auth-error').textContent = '';
+  });
+});
+document.getElementById('auth-submit').addEventListener('click', function(){
+  if(!sb) return;
+  var email = document.getElementById('auth-email').value.trim();
+  var pass = document.getElementById('auth-password').value;
+  var cs = document.getElementById('auth-callsign').value.trim();
+  var errEl = document.getElementById('auth-error');
+  errEl.textContent = '';
+  if(!email || !pass){ errEl.textContent = 'Preencha e-mail e senha.'; return; }
+  if(authMode === 'signup'){
+    if(!cs){ errEl.textContent = 'Escolha um nome de operador.'; return; }
+    sb.auth.signUp({ email:email, password:pass }).then(function(res){
+      if(res.error){ errEl.textContent = res.error.message; return; }
+      var user = res.data && res.data.user;
+      if(!user){ errEl.textContent = 'Algo deu errado, tente de novo.'; return; }
+      sb.from('profiles').insert({ id:user.id, callsign:cs }).then(function(){
+        if(res.data.session) onAuthSuccess(res.data.session, { id:user.id, callsign:cs });
+        else errEl.textContent = 'Conta criada! Confirme seu e-mail e depois toque em Entrar.';
+      });
+    });
+  } else {
+    sb.auth.signInWithPassword({ email:email, password:pass }).then(function(res){
+      if(res.error){ errEl.textContent = res.error.message; return; }
+      loadProfileAndEnter(res.data.session);
+    });
+  }
+});
+document.getElementById('auth-skip').addEventListener('click', function(){
+  guestMode = true;
+  localStorage.setItem('gridsix-guest', '1');
+  hideAuthGate();
+  startPartySync();
+});
+
+function loadProfileAndEnter(sess){
+  sb.from('profiles').select('*').eq('id', sess.user.id).single().then(function(res){
+    onAuthSuccess(sess, res.data || { id:sess.user.id, callsign: callsignEl().value || 'VOCÊ' });
+  });
+}
+function onAuthSuccess(sess, profile){
+  session = sess; myProfile = profile;
+  myId = profile.id;
+  localStorage.setItem('gridsix-player-id', myId);
+  guestMode = false;
+  localStorage.removeItem('gridsix-guest');
+  if(profile.callsign){
+    callsignEl().value = profile.callsign;
+    localStorage.setItem('gridsix-callsign', profile.callsign);
+    youMarker.setIcon(iconYou(profile.callsign));
+    refreshYouConeRef();
+  }
+  hideAuthGate();
+  renderAccountFooter();
+  startPartySync();
+  joinPresence();
+  loadFriends();
+  subscribeFriends();
+  subscribeInvites();
+}
+function renderAccountFooter(){
+  var el = document.getElementById('account-footer');
+  if(!session){ el.innerHTML = ''; return; }
+  el.innerHTML = '<button id="logout-btn">Sair da conta</button>';
+  document.getElementById('logout-btn').addEventListener('click', function(){
+    sb.auth.signOut().then(function(){ location.reload(); });
+  });
+}
+
+// ---------- amigos ----------
+function loadFriends(){
+  if(!session) return;
+  sb.from('friends').select('*').or('user_id.eq.' + session.user.id + ',friend_id.eq.' + session.user.id).then(function(res){
+    friends = {}; incomingRequests = {};
+    (res.data || []).forEach(function(f){
+      var otherId = f.user_id === session.user.id ? f.friend_id : f.user_id;
+      if(f.status === 'accepted'){ friends[otherId] = { id:otherId }; }
+      else if(f.status === 'pending' && f.friend_id === session.user.id){ incomingRequests[f.id] = { id:f.id, fromId:f.user_id }; }
+    });
+    var ids = Object.keys(friends).concat(Object.keys(incomingRequests).map(function(k){ return incomingRequests[k].fromId; }));
+    if(ids.length === 0){ renderFriends(); return; }
+    sb.from('profiles').select('*').in('id', ids).then(function(pres){
+      (pres.data || []).forEach(function(p){
+        if(friends[p.id]) friends[p.id].callsign = p.callsign;
+        Object.keys(incomingRequests).forEach(function(k){ if(incomingRequests[k].fromId === p.id) incomingRequests[k].callsign = p.callsign; });
+      });
+      renderFriends();
+    });
+  });
+}
+function subscribeFriends(){
+  if(!session) return;
+  if(friendsChannel) sb.removeChannel(friendsChannel);
+  friendsChannel = sb.channel('friends-' + session.user.id)
+    .on('postgres_changes', { event:'*', schema:'public', table:'friends' }, function(payload){
+      var row = payload.new || payload.old;
+      if(row && (row.user_id === session.user.id || row.friend_id === session.user.id)) loadFriends();
+    }).subscribe();
+}
+document.getElementById('friend-search-btn').addEventListener('click', searchFriend);
+document.getElementById('friend-search').addEventListener('keydown', function(e){ if(e.key==='Enter') searchFriend(); });
+function searchFriend(){
+  var q = document.getElementById('friend-search').value.trim();
+  var resultEl = document.getElementById('friend-search-result');
+  resultEl.innerHTML = '';
+  if(!q || !session || !sb) return;
+  sb.from('profiles').select('*').ilike('callsign', '%' + q + '%').neq('id', session.user.id).limit(6).then(function(res){
+    (res.data || []).forEach(function(p){
+      var row = document.createElement('div'); row.className = 'row'; row.style.cursor = 'default';
+      row.innerHTML = '<div class="row-main"><div class="row-name">' + p.callsign + '</div></div>';
+      var already = friends[p.id];
+      var btn = document.createElement('button'); btn.className = 'row-del'; btn.style.width = 'auto'; btn.style.padding = '0 10px';
+      btn.textContent = already ? 'Amigo' : '+ Adicionar';
+      if(already) btn.disabled = true;
+      btn.addEventListener('click', function(){
+        sb.from('friends').insert({ user_id:session.user.id, friend_id:p.id, status:'pending' }).then(function(res2){
+          if(!res2.error){ btn.textContent = 'Pedido enviado'; btn.disabled = true; }
+        });
+      });
+      row.appendChild(btn); resultEl.appendChild(row);
+    });
+    if((res.data || []).length === 0) resultEl.innerHTML = '<div class="empty">Ninguém encontrado com esse nome.</div>';
+  });
+}
+function respondRequest(reqId, accept){
+  if(accept) sb.from('friends').update({ status:'accepted' }).eq('id', reqId).then(loadFriends);
+  else sb.from('friends').delete().eq('id', reqId).then(loadFriends);
+}
+function renderFriends(){
+  var list = document.getElementById('friends-list');
+  list.innerHTML = '';
+  if(!session){
+    list.innerHTML = '<div class="empty">Crie uma conta ou entre pra ter uma lista de amigos fixa e convidar quem estiver online.</div>';
+    return;
+  }
+  var reqIds = Object.keys(incomingRequests);
+  if(reqIds.length){
+    var h = document.createElement('div'); h.className = 'modal-label'; h.style.margin = '0 0 4px'; h.textContent = 'Pedidos recebidos';
+    list.appendChild(h);
+    reqIds.forEach(function(rid){
+      var r = incomingRequests[rid];
+      var row = document.createElement('div'); row.className = 'row'; row.style.cursor = 'default';
+      row.innerHTML = '<div class="row-main"><div class="row-name">' + (r.callsign || '...') + '</div></div>';
+      var accept = document.createElement('button'); accept.className = 'row-del'; accept.textContent = '✓'; accept.style.color = 'var(--ok)';
+      accept.addEventListener('click', function(){ respondRequest(rid, true); });
+      var decline = document.createElement('button'); decline.className = 'row-del'; decline.style.marginLeft = '6px'; decline.textContent = '✕';
+      decline.addEventListener('click', function(){ respondRequest(rid, false); });
+      row.appendChild(accept); row.appendChild(decline);
+      list.appendChild(row);
+    });
+  }
+  var fh = document.createElement('div'); fh.className = 'modal-label'; fh.textContent = 'Amigos';
+  list.appendChild(fh);
+  var fids = Object.keys(friends);
+  if(fids.length === 0){
+    var e = document.createElement('div'); e.className = 'empty'; e.textContent = 'Nenhum amigo ainda. Busque pelo nome de operador acima.';
+    list.appendChild(e);
+  }
+  fids.forEach(function(fid){
+    var f = friends[fid];
+    var online = !!onlineFriends[fid];
+    var row = document.createElement('div'); row.className = 'row'; row.style.cursor = 'default';
+    var sw = document.createElement('div'); sw.className = 'swatch'; sw.style.background = online ? 'var(--ok)' : 'var(--text-muted)';
+    var main = document.createElement('div'); main.className = 'row-main';
+    main.innerHTML = '<div class="row-name">' + (f.callsign || '...') + '</div><div class="row-coord">' + (online ? 'Online' : 'Offline') + '</div>';
+    row.appendChild(sw); row.appendChild(main);
+    if(online){
+      var inv = document.createElement('button'); inv.className = 'row-del'; inv.style.width = 'auto'; inv.style.padding = '0 10px'; inv.style.color = 'var(--you)';
+      inv.textContent = 'Convidar';
+      inv.addEventListener('click', function(){ inviteFriend(fid); });
+      row.appendChild(inv);
+    }
+    list.appendChild(row);
+  });
+}
+
+// ---------- presença online ----------
+function joinPresence(){
+  if(!sb || !session) return;
+  presenceChannel = sb.channel('online-users', { config:{ presence:{ key:session.user.id } } });
+  presenceChannel.on('presence', { event:'sync' }, function(){
+    var state = presenceChannel.presenceState();
+    onlineFriends = {};
+    Object.keys(state).forEach(function(uid){ onlineFriends[uid] = true; });
+    if(activeTab === 'friends') renderFriends();
+  }).subscribe(function(status){
+    if(status === 'SUBSCRIBED') presenceChannel.track({ callsign: myProfile.callsign, online_at:new Date().toISOString() });
+  });
+}
+
+// ---------- convites de party ----------
+function inviteFriend(friendId){
+  sb.from('party_invites').insert({ from_user:session.user.id, to_user:friendId, party_code:partyCode, status:'pending' }).then(function(res){
+    if(!res.error) alert('Convite enviado!');
+  });
+}
+function subscribeInvites(){
+  if(!sb || !session) return;
+  invitesChannel = sb.channel('invites-' + session.user.id)
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'party_invites', filter:'to_user=eq.' + session.user.id }, function(payload){
+      showIncomingInvite(payload.new);
+    }).subscribe();
+}
+function showIncomingInvite(inv){
+  sb.from('profiles').select('callsign').eq('id', inv.from_user).single().then(function(res){
+    var name = (res.data && res.data.callsign) || 'Alguém';
+    if(confirm(name + ' te convidou pra party ' + inv.party_code + '. Entrar agora?')){
+      sb.from('party_invites').update({ status:'accepted' }).eq('id', inv.id).then(function(){});
+      switchParty(inv.party_code);
+    } else {
+      sb.from('party_invites').update({ status:'declined' }).eq('id', inv.id).then(function(){});
+    }
+  });
+}
+
+// ---------- resolve o estado inicial (logado, convidado, ou pede login) ----------
 if(sb){
-  loadPartyData();
-  subscribeParty();
-  pushMyPosition(true);
+  sb.auth.getSession().then(function(res){
+    var sess = res.data && res.data.session;
+    if(sess){ loadProfileAndEnter(sess); }
+    else if(guestMode){ hideAuthGate(); startPartySync(); }
+    else { showAuthGate(); }
+  });
 } else {
-  setSyncStatus(false, 'backend indisponível');
+  hideAuthGate();
+  startPartySync();
 }
 
 // ---------- abas ----------
 function switchTab(tab){
   activeTab = tab;
-  document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.tab===tab); });
+  document.querySelectorAll('#tabs .tab').forEach(function(t){ t.classList.toggle('active', t.dataset.tab===tab); });
   if(tab==='comms'){
     var t = document.querySelector('.tab[data-tab="comms"]');
     if(t) t.classList.remove('has-unread');
   }
   renderList();
 }
-document.querySelectorAll('.tab').forEach(function(t){ t.addEventListener('click', function(){ switchTab(t.dataset.tab); }); });
+document.querySelectorAll('#tabs .tab').forEach(function(t){ t.addEventListener('click', function(){ switchTab(t.dataset.tab); }); });
 
 // ---------- formato ----------
 document.getElementById('fmt-toggle').addEventListener('click', function(){
@@ -1226,6 +1527,7 @@ callsignEl().addEventListener('input', function(){
   refreshYouConeRef();
   localStorage.setItem('gridsix-callsign', this.value || 'VOCÊ');
   pushMyPosition(true);
+  if(session) sb.from('profiles').update({ callsign:this.value || 'VOCÊ' }).eq('id', session.user.id).then(function(){});
 });
 
 // ---------- adicionar ponto manual (GPS ou MGRS) ----------
