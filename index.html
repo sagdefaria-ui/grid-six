@@ -671,7 +671,7 @@ function handleOrientation(e){
   } else { return; }
   var ang = screenAngle();
   window.__debugAngle = 'raw:' + Math.round(rawSensor) + ' scr:' + ang;
-  setHeading(rawSensor - ang);
+  setHeading(rawSensor + ang);
 }
 document.getElementById('compass-btn').addEventListener('click', function(){
   var btn = this;
