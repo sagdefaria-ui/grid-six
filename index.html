@@ -1304,11 +1304,11 @@ document.getElementById('auth-submit').addEventListener('click', function(){
   if(!email || !pass){ errEl.textContent = 'Preencha e-mail e senha.'; return; }
   if(authMode === 'signup'){
     if(!cs){ errEl.textContent = 'Escolha um nome de operador.'; return; }
-    sb.auth.signUp({ email:email, password:pass }).then(function(res){
+    sb.auth.signUp({ email:email, password:pass, options:{ data:{ callsign:cs } } }).then(function(res){
       if(res.error){ errEl.textContent = res.error.message; return; }
       var user = res.data && res.data.user;
       if(!user){ errEl.textContent = 'Algo deu errado, tente de novo.'; return; }
-      sb.from('profiles').insert({ id:user.id, callsign:cs }).then(function(){
+      sb.from('profiles').upsert({ id:user.id, callsign:cs }).then(function(){
         if(res.data.session) onAuthSuccess(res.data.session, { id:user.id, callsign:cs });
         else errEl.textContent = 'Conta criada! Confirme seu e-mail e depois toque em Entrar.';
       });
@@ -1576,7 +1576,7 @@ callsignEl().addEventListener('input', function(){
   refreshYouConeRef();
   localStorage.setItem('gridsix-callsign', this.value || 'VOCÊ');
   pushMyPosition(true);
-  if(session) sb.from('profiles').update({ callsign:this.value || 'VOCÊ' }).eq('id', session.user.id).then(function(){});
+  if(session) sb.from('profiles').upsert({ id:session.user.id, callsign:this.value || 'VOCÊ' }).then(function(){});
 });
 
 // ---------- adicionar ponto manual (GPS ou MGRS) ----------
