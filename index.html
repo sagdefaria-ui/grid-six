@@ -186,16 +186,14 @@
   body.landscape #locate-btn{ bottom:16px; right:calc(360px + 16px); }
   body.landscape #layer-toggle{ bottom:74px; right:calc(360px + 16px); }
   body.landscape #add-point-btn{ bottom:132px; right:calc(360px + 16px); }
-  #kia-btn, #alert-btn{
+  #kia-btn{
     position:absolute; z-index:499; width:46px; height:46px; border-radius:50%;
     background:var(--panel); border:0.5px solid var(--border-strong); font-size:17px;
     display:flex; align-items:center; justify-content:center; right:14px;
+    bottom:calc(50vh + 16px + 174px); color:var(--danger);
   }
-  #kia-btn{ bottom:calc(50vh + 16px + 174px); color:var(--danger); }
-  #alert-btn{ bottom:calc(50vh + 16px + 232px); color:var(--squad); }
-  #kia-btn:active, #alert-btn:active{ background:var(--panel-2); }
+  #kia-btn:active{ background:var(--panel-2); }
   body.landscape #kia-btn{ bottom:190px; right:calc(360px + 16px); }
-  body.landscape #alert-btn{ bottom:248px; right:calc(360px + 16px); }
   #big-alert{
     position:absolute; top:50%; left:12px; right:12px; transform:translateY(-50%); z-index:900;
     background:rgba(20,10,8,.95); border:1.5px solid var(--danger); border-radius:14px;
@@ -372,7 +370,6 @@
 <button id="layer-toggle" title="Alternar mapa/satélite">🛰️</button>
 <button id="add-point-btn" title="Adicionar ponto">📍</button>
 <button id="kia-btn" title="Avisar que fui eliminado">💀</button>
-<button id="alert-btn" title="Alertar posição importante">🚨</button>
 <div id="big-alert"></div>
 <button id="immersive-btn" title="Esconder menus">⛶</button>
 
@@ -838,28 +835,15 @@ function maybeFetchGroundElevation(){
     }).catch(function(){ /* serviço de elevação fora do ar, ignora e segue sem altura do solo */ });
 }
 
-// ---------- alertas: eliminado e posição importante ----------
-var alertMarkers = {};
-function plotAlertPing(id, lat, lng, sender){
-  if(alertMarkers[id]) map.removeLayer(alertMarkers[id]);
-  var ic = L.divIcon({
-    className:'', html:'<div style="display:flex;align-items:center"><div class="pin-3d" style="width:26px;height:26px;font-size:13px;background:radial-gradient(circle at 33% 28%,#FFD79A 0%,var(--danger) 42%,#5A140C 100%)">🚨</div><div class="pin-label">' + sender + '</div></div>',
-    iconSize:[26,26], iconAnchor:[13,13]
-  });
-  alertMarkers[id] = L.marker([lat, lng], { icon:ic }).addTo(map);
-  setTimeout(function(){ if(alertMarkers[id]){ map.removeLayer(alertMarkers[id]); delete alertMarkers[id]; } }, 180000);
-}
+// ---------- alertas: eliminado ----------
 document.getElementById('kia-btn').addEventListener('click', function(){
   if(!confirm('Confirma que você foi eliminado? Isso avisa toda a party agora.')) return;
   var sender = callsignEl().value || 'VOCÊ';
-  if(sb) sb.from('messages').insert({ party_code:partyCode, sender:sender, body:'está eliminado(a)', kind:'kia' }).then(function(){});
-  showBigAlert('💀 Você marcou que foi eliminado', true);
-});
-document.getElementById('alert-btn').addEventListener('click', function(){
-  if(!confirm('Alertar sua posição atual pra toda a party agora?')) return;
-  var sender = callsignEl().value || 'VOCÊ';
-  if(sb) sb.from('messages').insert({ party_code:partyCode, sender:sender, body:'marcou uma posição importante', kind:'alert', lat:you.lat, lng:you.lng }).then(function(){});
-  showBigAlert('🚨 Alerta de posição enviado', false);
+  if(!sb){ addMessage({ sender:sender, text:'está eliminado(a)', kind:'kia', isMe:true }); showBigAlert('💀 Você marcou que foi eliminado', true); return; }
+  sb.from('messages').insert({ party_code:partyCode, sender:sender, body:'está eliminado(a)', kind:'kia' }).then(function(res){
+    if(res.error){ addMessage({ sender:'Sistema', text:'Falha ao avisar eliminação: ' + res.error.message }); return; }
+    showBigAlert('💀 Você marcou que foi eliminado', true);
+  });
 });
 // ---------- bússola ----------
 function screenAngle(){
@@ -1581,7 +1565,6 @@ function loadPartyData(){
         isMe: m.sender === (callsignEl().value || 'VOCÊ'), kind:m.kind,
         audioPath:m.audio_path, imagePath:m.image_path
       });
-      if(m.kind === 'alert' && typeof m.lat === 'number' && typeof m.lng === 'number') plotAlertPing(m.id, m.lat, m.lng, m.sender);
     });
   });
   cleanupOldMessages();
@@ -1617,10 +1600,6 @@ function subscribeParty(){
         isMe:isMe, kind:m.kind, audioPath:m.audio_path, imagePath:m.image_path
       });
       if(m.kind === 'kia') showBigAlert('💀 ' + m.sender + ' foi eliminado(a)', true);
-      else if(m.kind === 'alert'){
-        showBigAlert('🚨 ' + m.sender + ' marcou uma posição no mapa', false);
-        if(typeof m.lat === 'number' && typeof m.lng === 'number') plotAlertPing(m.id, m.lat, m.lng, m.sender);
-      }
     })
     .on('postgres_changes', { event:'DELETE', schema:'public', table:'messages', filter:'party_code=eq.' + partyCode }, function(payload){
       deleteMessageLocal(payload.old.id);
