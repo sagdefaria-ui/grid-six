@@ -186,6 +186,22 @@
   body.landscape #locate-btn{ bottom:16px; right:calc(360px + 16px); }
   body.landscape #layer-toggle{ bottom:74px; right:calc(360px + 16px); }
   body.landscape #add-point-btn{ bottom:132px; right:calc(360px + 16px); }
+  #kia-btn, #alert-btn{
+    position:absolute; z-index:499; width:46px; height:46px; border-radius:50%;
+    background:var(--panel); border:0.5px solid var(--border-strong); font-size:17px;
+    display:flex; align-items:center; justify-content:center; right:14px;
+  }
+  #kia-btn{ bottom:calc(50vh + 16px + 174px); color:var(--danger); }
+  #alert-btn{ bottom:calc(50vh + 16px + 232px); color:var(--squad); }
+  #kia-btn:active, #alert-btn:active{ background:var(--panel-2); }
+  body.landscape #kia-btn{ bottom:190px; right:calc(360px + 16px); }
+  body.landscape #alert-btn{ bottom:248px; right:calc(360px + 16px); }
+  #big-alert{
+    position:absolute; top:50%; left:12px; right:12px; transform:translateY(-50%); z-index:900;
+    background:rgba(20,10,8,.95); border:1.5px solid var(--danger); border-radius:14px;
+    padding:18px; text-align:center; font-size:16px; font-weight:700; color:var(--text-primary);
+    display:none; box-shadow:0 8px 24px rgba(0,0,0,.5);
+  }
 
   #immersive-btn{
     position:absolute; z-index:600; top:calc(env(safe-area-inset-top,0px) + 10px); right:14px;
@@ -218,6 +234,13 @@
   }
   #ptt.active{background:rgba(217,85,63,.18); border-color:var(--danger); color:var(--danger);}
   #ptt-note{padding:0 14px 10px; font-size:10.5px; color:var(--text-muted); flex-shrink:0;}
+  #walkie-row{padding:0 14px 6px; flex-shrink:0;}
+  #walkie-btn{
+    width:100%; padding:12px; border-radius:10px; background:rgba(91,184,232,.12); border:0.5px solid var(--you);
+    color:var(--you); font-family:var(--sans); font-size:13px; font-weight:600;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  #walkie-btn.active{ background:var(--you); color:#062033; }
 
   /* Party */
   #party-panel{display:none; flex-direction:column; flex:1; min-height:0;}
@@ -318,6 +341,9 @@
 <button id="locate-btn" title="Me localizar">🎯</button>
 <button id="layer-toggle" title="Alternar mapa/satélite">🛰️</button>
 <button id="add-point-btn" title="Adicionar ponto">📍</button>
+<button id="kia-btn" title="Avisar que fui eliminado">💀</button>
+<button id="alert-btn" title="Alertar posição importante">🚨</button>
+<div id="big-alert"></div>
 <button id="immersive-btn" title="Esconder menus">⛶</button>
 
 <div id="auth-gate" class="modal-overlay" style="display:flex; background:rgba(11,13,8,.97);">
@@ -361,6 +387,7 @@
       <button id="chat-send">Enviar</button>
     </div>
     <div id="ptt-row"><button id="ptt">🎙️ Segure para falar</button></div>
+    <div id="walkie-row"><button id="walkie-btn">📡 Segure pro walkie-talkie AO VIVO</button></div>
     <div id="ptt-note">Envio pode levar um segundo — depende da sua conexão.</div>
   </div>
 
@@ -407,6 +434,17 @@
     </div>
     <button id="acct-logout" style="width:100%; margin-top:10px; background:none; border:none; color:var(--danger); font-size:12px;">Sair da conta</button>
     <button id="account-close" style="width:100%; margin-top:6px; background:none; border:0.5px solid var(--border); color:var(--text-secondary); border-radius:8px; padding:9px; font-size:12px;">Fechar</button>
+  </div>
+</div>
+
+<div id="call-overlay" class="modal-overlay" style="z-index:950; padding:0;">
+  <div style="width:100%; height:100%; position:relative; display:flex; flex-direction:column;">
+    <video id="call-remote-video" autoplay playsinline style="flex:1; width:100%; background:#000; object-fit:cover;"></video>
+    <video id="call-local-video" autoplay playsinline muted style="position:absolute; width:100px; height:140px; right:14px; top:calc(env(safe-area-inset-top,0px) + 14px); border-radius:10px; object-fit:cover; border:2px solid var(--you); background:#000;"></video>
+    <div id="call-status" style="position:absolute; top:calc(env(safe-area-inset-top,0px) + 14px); left:14px; background:rgba(0,0,0,.6); padding:6px 12px; border-radius:8px; font-size:13px;"></div>
+    <div style="padding:16px; padding-bottom:calc(env(safe-area-inset-bottom,0px) + 16px); display:flex; gap:16px; justify-content:center; background:var(--panel);">
+      <button id="call-end-btn" style="background:var(--danger); color:#fff; border:none; border-radius:50%; width:58px; height:58px; font-size:24px;">📵</button>
+    </div>
   </div>
 </div>
 
@@ -754,6 +792,29 @@ function maybeFetchGroundElevation(){
     }).catch(function(){ /* serviço de elevação fora do ar, ignora e segue sem altura do solo */ });
 }
 
+// ---------- alertas: eliminado e posição importante ----------
+var alertMarkers = {};
+function plotAlertPing(id, lat, lng, sender){
+  if(alertMarkers[id]) map.removeLayer(alertMarkers[id]);
+  var ic = L.divIcon({
+    className:'', html:'<div style="display:flex;align-items:center"><div class="pin-3d" style="width:26px;height:26px;font-size:13px;background:radial-gradient(circle at 33% 28%,#FFD79A 0%,var(--danger) 42%,#5A140C 100%)">🚨</div><div class="pin-label">' + sender + '</div></div>',
+    iconSize:[26,26], iconAnchor:[13,13]
+  });
+  alertMarkers[id] = L.marker([lat, lng], { icon:ic }).addTo(map);
+  setTimeout(function(){ if(alertMarkers[id]){ map.removeLayer(alertMarkers[id]); delete alertMarkers[id]; } }, 180000);
+}
+document.getElementById('kia-btn').addEventListener('click', function(){
+  if(!confirm('Confirma que você foi eliminado? Isso avisa toda a party agora.')) return;
+  var sender = callsignEl().value || 'VOCÊ';
+  if(sb) sb.from('messages').insert({ party_code:partyCode, sender:sender, body:'está eliminado(a)', kind:'kia' }).then(function(){});
+  showBigAlert('💀 Você marcou que foi eliminado', true);
+});
+document.getElementById('alert-btn').addEventListener('click', function(){
+  if(!confirm('Alertar sua posição atual pra toda a party agora?')) return;
+  var sender = callsignEl().value || 'VOCÊ';
+  if(sb) sb.from('messages').insert({ party_code:partyCode, sender:sender, body:'marcou uma posição importante', kind:'alert', lat:you.lat, lng:you.lng }).then(function(){});
+  showBigAlert('🚨 Alerta de posição enviado', false);
+});
 // ---------- bússola ----------
 function screenAngle(){
   if(window.screen && window.screen.orientation && typeof window.screen.orientation.angle === 'number') return window.screen.orientation.angle;
@@ -931,6 +992,16 @@ function rowEl(name, coord, distStr, brngStr, lat, lng, id, group, deletable, co
   if(isTracking){ trackBtn.style.color = 'var(--you)'; trackBtn.style.borderColor = 'var(--you)'; }
   trackBtn.addEventListener('click', function(ev){ ev.stopPropagation(); setTrack(id, group); });
   row.appendChild(trackBtn);
+  if(group === 'squad'){
+    var callBtn = document.createElement('button'); callBtn.className='row-del'; callBtn.style.marginLeft='6px'; callBtn.textContent='📞';
+    callBtn.title = 'Ligar (áudio)';
+    callBtn.addEventListener('click', function(ev){ ev.stopPropagation(); startCall(id, name, false); });
+    row.appendChild(callBtn);
+    var vidBtn = document.createElement('button'); vidBtn.className='row-del'; vidBtn.style.marginLeft='6px'; vidBtn.textContent='🎥';
+    vidBtn.title = 'Ligar (vídeo)';
+    vidBtn.addEventListener('click', function(ev){ ev.stopPropagation(); startCall(id, name, true); });
+    row.appendChild(vidBtn);
+  }
   if(deletable){
     var eye = document.createElement('button'); eye.className='row-del'; eye.textContent = hidden ? '🚫' : '👁';
     eye.title = hidden ? 'Mostrar no mapa' : 'Esconder do mapa';
@@ -980,19 +1051,33 @@ document.getElementById('wp-confirm').addEventListener('click', function(){
 });
 
 // ---------- comunicação ----------
-function addMessage(sender, text, audio, isMe){
-  messages.push({ sender:sender, text:text, audio:audio, isMe: !!isMe });
+function addMessage(sender, text, audio, isMe, kind){
+  messages.push({ sender:sender, text:text, audio:audio, isMe: !!isMe, kind:kind||'chat' });
   if(activeTab==='comms') renderChat();
   else if(!isMe){
     var t = document.querySelector('.tab[data-tab="comms"]');
     if(t) t.classList.add('has-unread');
   }
 }
+function showBigAlert(text, isKia){
+  var el = document.getElementById('big-alert');
+  el.textContent = text;
+  el.style.borderColor = isKia ? 'var(--danger)' : 'var(--squad)';
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(function(){ el.style.display = 'none'; }, 6000);
+}
 function renderChat(){
   var log = document.getElementById('chat-log');
   log.innerHTML = '';
   messages.forEach(function(m){
-    var b = document.createElement('div'); b.className = 'msg ' + (m.isMe ? 'msg-me' : 'msg-them');
+    var special = m.kind === 'kia' || m.kind === 'alert';
+    var b = document.createElement('div'); b.className = 'msg ' + (special ? '' : (m.isMe ? 'msg-me' : 'msg-them'));
+    if(special){
+      b.style.alignSelf = 'center'; b.style.maxWidth = '92%';
+      b.style.background = m.kind==='kia' ? 'rgba(217,85,63,.18)' : 'rgba(232,162,61,.18)';
+      b.style.border = '0.5px solid ' + (m.kind==='kia' ? 'var(--danger)' : 'var(--squad)');
+    }
     var html = '<div class="msg-sender">' + m.sender + '</div>';
     if(m.text) html += '<div>' + m.text + '</div>';
     if(m.audio) html += '<audio controls src="' + m.audio.url + '"></audio>';
@@ -1068,6 +1153,151 @@ var pttBtn = document.getElementById('ptt');
 pttBtn.addEventListener('pointerdown', startRecording);
 pttBtn.addEventListener('pointerup', stopRecording);
 pttBtn.addEventListener('pointerleave', function(){ if(recording) stopRecording(); });
+
+// ---------- WebRTC: sinalização ----------
+var ICE_SERVERS = { iceServers:[
+  { urls:'stun:stun.l.google.com:19302' },
+  { urls:'stun:stun1.l.google.com:19302' }
+]};
+var rtcChannel = null;
+function sendSignal(msg){ if(rtcChannel) rtcChannel.send({ type:'broadcast', event:'signal', payload:msg }); }
+function setupRTC(){
+  if(!sb) return;
+  if(rtcChannel) sb.removeChannel(rtcChannel);
+  rtcChannel = sb.channel('rtc-' + partyCode, { config:{ broadcast:{ self:false } } });
+  rtcChannel.on('broadcast', { event:'signal' }, function(msg){ handleSignal(msg.payload); }).subscribe();
+}
+function teardownRTC(){
+  stopWalkieLive();
+  endCall(true);
+  if(rtcChannel){ sb.removeChannel(rtcChannel); rtcChannel = null; }
+}
+
+// ---------- walkie-talkie AO VIVO (transmite pra todo mundo enquanto segura) ----------
+var walkiePeers = {};
+var localWalkieStream = null;
+var walkieActive = false;
+function startWalkieLive(){
+  if(walkieActive || !sb) return;
+  navigator.mediaDevices.getUserMedia({ audio:true }).then(function(stream){
+    localWalkieStream = stream;
+    walkieActive = true;
+    document.getElementById('walkie-btn').classList.add('active');
+    Object.keys(squad).forEach(function(peerId){ startWalkiePeer(peerId); });
+  }).catch(function(){ addMessage('Sistema', 'Permissão de microfone negada.', null, false); });
+}
+function startWalkiePeer(peerId){
+  var pc = new RTCPeerConnection(ICE_SERVERS);
+  walkiePeers[peerId] = pc;
+  localWalkieStream.getTracks().forEach(function(t){ pc.addTrack(t, localWalkieStream); });
+  pc.onicecandidate = function(e){ if(e.candidate) sendSignal({ to:peerId, from:myId, type:'ice-walkie', candidate:e.candidate }); };
+  pc.createOffer().then(function(o){ return pc.setLocalDescription(o); }).then(function(){
+    sendSignal({ to:peerId, from:myId, type:'walkie-offer', sdp:pc.localDescription, name:callsignEl().value || 'VOCÊ' });
+  });
+}
+function stopWalkieLive(){
+  if(!walkieActive) return;
+  walkieActive = false;
+  document.getElementById('walkie-btn').classList.remove('active');
+  Object.keys(walkiePeers).forEach(function(id){
+    sendSignal({ to:id, from:myId, type:'walkie-end' });
+    walkiePeers[id].close(); delete walkiePeers[id];
+  });
+  if(localWalkieStream){ localWalkieStream.getTracks().forEach(function(t){ t.stop(); }); localWalkieStream = null; }
+}
+var walkieBtn = document.getElementById('walkie-btn');
+walkieBtn.addEventListener('pointerdown', startWalkieLive);
+walkieBtn.addEventListener('pointerup', stopWalkieLive);
+walkieBtn.addEventListener('pointerleave', function(){ if(walkieActive) stopWalkieLive(); });
+
+// quem recebe o walkie ao vivo (lado de quem está ouvindo)
+var walkieListeners = {};
+function acceptWalkiePeer(fromId, sdp, name){
+  var pc = new RTCPeerConnection(ICE_SERVERS);
+  walkieListeners[fromId] = pc;
+  var audioEl = document.createElement('audio'); audioEl.autoplay = true;
+  pc.ontrack = function(e){ audioEl.srcObject = e.streams[0]; document.body.appendChild(audioEl); };
+  pc.onicecandidate = function(e){ if(e.candidate) sendSignal({ to:fromId, from:myId, type:'ice-walkie', candidate:e.candidate }); };
+  pc.setRemoteDescription(new RTCSessionDescription(sdp)).then(function(){ return pc.createAnswer(); })
+    .then(function(a){ return pc.setLocalDescription(a); })
+    .then(function(){ sendSignal({ to:fromId, from:myId, type:'walkie-answer', sdp:pc.localDescription }); });
+  showBigAlert('📡 ' + (name || 'Alguém') + ' está no walkie-talkie...', false);
+  pc._audioEl = audioEl;
+}
+function endWalkieListener(fromId){
+  var pc = walkieListeners[fromId];
+  if(pc){ if(pc._audioEl) pc._audioEl.remove(); pc.close(); delete walkieListeners[fromId]; }
+}
+
+// ---------- chamada 1-a-1 (áudio/vídeo) ----------
+var callPC = null, localCallStream = null, callState = null;
+function showCallUI(){ document.getElementById('call-overlay').style.display = 'flex'; }
+function hideCallUI(){ document.getElementById('call-overlay').style.display = 'none'; document.getElementById('call-status').textContent = ''; }
+function startCall(peerId, peerName, withVideo){
+  if(callState) return;
+  navigator.mediaDevices.getUserMedia({ audio:true, video:!!withVideo }).then(function(stream){
+    localCallStream = stream;
+    document.getElementById('call-local-video').srcObject = stream;
+    document.getElementById('call-local-video').style.display = withVideo ? 'block' : 'none';
+    callPC = new RTCPeerConnection(ICE_SERVERS);
+    stream.getTracks().forEach(function(t){ callPC.addTrack(t, stream); });
+    callPC.onicecandidate = function(e){ if(e.candidate) sendSignal({ to:peerId, from:myId, type:'ice-call', candidate:e.candidate }); };
+    callPC.ontrack = function(e){ document.getElementById('call-remote-video').srcObject = e.streams[0]; };
+    callState = { peerId:peerId, peerName:peerName };
+    document.getElementById('call-status').textContent = 'Chamando ' + peerName + '...';
+    showCallUI();
+    callPC.createOffer().then(function(o){ return callPC.setLocalDescription(o); }).then(function(){
+      sendSignal({ to:peerId, from:myId, type:'call-offer', sdp:callPC.localDescription, name:callsignEl().value || 'VOCÊ', video:!!withVideo });
+    });
+  }).catch(function(){ alert('Não consegui acessar câmera/microfone.'); });
+}
+function endCall(remoteEnded){
+  if(callPC){ callPC.close(); callPC = null; }
+  if(localCallStream){ localCallStream.getTracks().forEach(function(t){ t.stop(); }); localCallStream = null; }
+  if(!remoteEnded && callState) sendSignal({ to:callState.peerId, from:myId, type:'call-end' });
+  callState = null;
+  hideCallUI();
+}
+document.getElementById('call-end-btn').addEventListener('click', function(){ endCall(false); });
+
+function handleSignal(msg){
+  if(!msg || (msg.to !== myId && msg.to !== 'all')) return;
+  if(msg.type === 'walkie-offer'){ acceptWalkiePeer(msg.from, msg.sdp, msg.name); }
+  else if(msg.type === 'walkie-answer'){ var p = walkiePeers[msg.from]; if(p) p.setRemoteDescription(new RTCSessionDescription(msg.sdp)); }
+  else if(msg.type === 'ice-walkie'){
+    var pw = walkiePeers[msg.from] || walkieListeners[msg.from];
+    if(pw && msg.candidate) pw.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(function(){});
+  }
+  else if(msg.type === 'walkie-end'){ endWalkieListener(msg.from); }
+  else if(msg.type === 'call-offer'){
+    if(callState){ sendSignal({ to:msg.from, from:myId, type:'call-decline' }); return; }
+    if(confirm((msg.name || 'Alguém') + ' está te chamando' + (msg.video ? ' (vídeo)' : ' (áudio)') + '. Atender?')){
+      navigator.mediaDevices.getUserMedia({ audio:true, video:!!msg.video }).then(function(stream){
+        localCallStream = stream;
+        document.getElementById('call-local-video').srcObject = stream;
+        document.getElementById('call-local-video').style.display = msg.video ? 'block' : 'none';
+        callPC = new RTCPeerConnection(ICE_SERVERS);
+        stream.getTracks().forEach(function(t){ callPC.addTrack(t, stream); });
+        callPC.onicecandidate = function(e){ if(e.candidate) sendSignal({ to:msg.from, from:myId, type:'ice-call', candidate:e.candidate }); };
+        callPC.ontrack = function(e){ document.getElementById('call-remote-video').srcObject = e.streams[0]; };
+        callState = { peerId:msg.from, peerName:msg.name };
+        document.getElementById('call-status').textContent = 'Em chamada com ' + msg.name;
+        showCallUI();
+        callPC.setRemoteDescription(new RTCSessionDescription(msg.sdp)).then(function(){ return callPC.createAnswer(); })
+          .then(function(a){ return callPC.setLocalDescription(a); })
+          .then(function(){ sendSignal({ to:msg.from, from:myId, type:'call-answer', sdp:callPC.localDescription }); });
+      }).catch(function(){ sendSignal({ to:msg.from, from:myId, type:'call-decline' }); });
+    } else {
+      sendSignal({ to:msg.from, from:myId, type:'call-decline' });
+    }
+  }
+  else if(msg.type === 'call-answer'){
+    if(callPC){ callPC.setRemoteDescription(new RTCSessionDescription(msg.sdp)); document.getElementById('call-status').textContent = 'Em chamada com ' + (callState ? callState.peerName : ''); }
+  }
+  else if(msg.type === 'ice-call'){ if(callPC && msg.candidate) callPC.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(function(){}); }
+  else if(msg.type === 'call-decline'){ alert('Chamada recusada.'); endCall(true); }
+  else if(msg.type === 'call-end'){ endCall(true); }
+}
 
 // ---------- party ----------
 function renderParty(){
@@ -1261,7 +1491,8 @@ function loadPartyData(){
   });
   sb.from('messages').select('*').eq('party_code', partyCode).order('created_at', { ascending:true }).limit(50).then(function(res){
     (res.data || []).forEach(function(m){
-      addMessage(m.sender, m.body, m.audio_url ? { url:m.audio_url } : null, m.sender === (callsignEl().value || 'VOCÊ'));
+      addMessage(m.sender, m.body, m.audio_url ? { url:m.audio_url } : null, m.sender === (callsignEl().value || 'VOCÊ'), m.kind);
+      if(m.kind === 'alert' && typeof m.lat === 'number' && typeof m.lng === 'number') plotAlertPing(m.id, m.lat, m.lng, m.sender);
     });
   });
 }
@@ -1270,6 +1501,7 @@ function subscribeParty(){
   if(playersChannel) sb.removeChannel(playersChannel);
   if(waypointsChannel) sb.removeChannel(waypointsChannel);
   if(messagesChannel) sb.removeChannel(messagesChannel);
+  setupRTC();
 
   playersChannel = sb.channel('players-' + partyCode)
     .on('postgres_changes', { event:'*', schema:'public', table:'players', filter:'party_code=eq.' + partyCode }, function(payload){
@@ -1287,11 +1519,18 @@ function subscribeParty(){
   messagesChannel = sb.channel('messages-' + partyCode)
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages', filter:'party_code=eq.' + partyCode }, function(payload){
       var m = payload.new;
-      addMessage(m.sender, m.body, m.audio_url ? { url:m.audio_url } : null, m.sender === (callsignEl().value || 'VOCÊ'));
+      var isMe = m.sender === (callsignEl().value || 'VOCÊ');
+      addMessage(m.sender, m.body, m.audio_url ? { url:m.audio_url } : null, isMe, m.kind);
+      if(m.kind === 'kia') showBigAlert('💀 ' + m.sender + ' foi eliminado(a)', true);
+      else if(m.kind === 'alert'){
+        showBigAlert('🚨 ' + m.sender + ' marcou uma posição no mapa', false);
+        if(typeof m.lat === 'number' && typeof m.lng === 'number') plotAlertPing(m.id, m.lat, m.lng, m.sender);
+      }
     }).subscribe();
 }
 
 function switchParty(code){
+  teardownRTC();
   partyCode = code;
   localStorage.setItem('gridsix-party-code', partyCode);
   document.getElementById('party-code-val').textContent = partyCode;
