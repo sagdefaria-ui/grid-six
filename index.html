@@ -228,19 +228,20 @@
   #chat-bar button{background:var(--you); color:#062033; border:none; border-radius:8px; padding:0 14px; font-weight:600; font-size:13px;}
   #ptt-row{padding:4px 14px 14px; flex-shrink:0;}
   #ptt{
-    width:100%; padding:12px; border-radius:10px; background:var(--panel-2); border:0.5px solid var(--border-strong);
+    width:100%; padding:14px; border-radius:10px; background:var(--panel-2); border:0.5px solid var(--border-strong);
     color:var(--text-secondary); font-family:var(--sans); font-size:13px; font-weight:500;
     display:flex; align-items:center; justify-content:center; gap:8px;
+    -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; touch-action:none;
   }
-  #ptt.active{background:rgba(217,85,63,.18); border-color:var(--danger); color:var(--danger);}
+  #ptt.active{
+    background:var(--danger); border-color:var(--danger); color:#fff;
+    animation:ptt-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes ptt-pulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(217,85,63,.5); } 50%{ box-shadow:0 0 0 10px rgba(217,85,63,0); } }
+  #ptt .rec-dot{ width:9px; height:9px; border-radius:50%; background:#fff; display:none; }
+  #ptt.active .rec-dot{ display:inline-block; animation:ptt-blink 1s step-start infinite; }
+  @keyframes ptt-blink{ 50%{ opacity:0; } }
   #ptt-note{padding:0 14px 10px; font-size:10.5px; color:var(--text-muted); flex-shrink:0;}
-  #walkie-row{padding:0 14px 6px; flex-shrink:0;}
-  #walkie-btn{
-    width:100%; padding:12px; border-radius:10px; background:rgba(91,184,232,.12); border:0.5px solid var(--you);
-    color:var(--you); font-family:var(--sans); font-size:13px; font-weight:600;
-    display:flex; align-items:center; justify-content:center; gap:8px;
-  }
-  #walkie-btn.active{ background:var(--you); color:#062033; }
 
   /* Party */
   #party-panel{display:none; flex-direction:column; flex:1; min-height:0;}
@@ -386,8 +387,7 @@
       <input id="chat-input" placeholder="Mensagem para a party">
       <button id="chat-send">Enviar</button>
     </div>
-    <div id="ptt-row"><button id="ptt">🎙️ Segure para falar</button></div>
-    <div id="walkie-row"><button id="walkie-btn">📡 Segure pro walkie-talkie AO VIVO</button></div>
+    <div id="ptt-row"><button id="ptt"><span class="rec-dot"></span><span id="ptt-label">🎙️ Segure para falar</span></button></div>
     <div id="ptt-note">Envio pode levar um segundo — depende da sua conexão.</div>
   </div>
 
@@ -1103,12 +1103,17 @@ function sendChat(){
 }
 
 var mediaRecorder, audioChunks=[], recording=false;
+var recTimerInt = null, recStartTs = 0;
 function pickMimeType(){
   var candidates = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/aac'];
   for(var i=0; i<candidates.length; i++){
     if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
   }
   return '';
+}
+function fmtRecTime(ms){
+  var s = Math.floor(ms/1000);
+  return Math.floor(s/60) + ':' + (s%60<10?'0':'') + (s%60);
 }
 function startRecording(){
   if(recording) return;
@@ -1121,6 +1126,11 @@ function startRecording(){
     mediaRecorder.start();
     recording = true;
     document.getElementById('ptt').classList.add('active');
+    recStartTs = Date.now();
+    document.getElementById('ptt-label').textContent = 'Gravando... 0:00';
+    recTimerInt = setInterval(function(){
+      document.getElementById('ptt-label').textContent = 'Gravando... ' + fmtRecTime(Date.now() - recStartTs);
+    }, 250);
   }).catch(function(){
     addMessage('Sistema', 'Permissão de microfone negada.', null, false);
   });
@@ -1128,7 +1138,9 @@ function startRecording(){
 function stopRecording(){
   if(!recording || !mediaRecorder) return;
   recording = false;
+  clearInterval(recTimerInt);
   document.getElementById('ptt').classList.remove('active');
+  document.getElementById('ptt-label').textContent = '🎙️ Segure para falar';
   mediaRecorder.onstop = function(){
     var mime = (mediaRecorder.mimeType || 'audio/webm').split(';')[0];
     var ext = mime.indexOf('mp4') > -1 ? 'm4a' : (mime.indexOf('ogg') > -1 ? 'ogg' : (mime.indexOf('aac') > -1 ? 'aac' : 'webm'));
@@ -1153,6 +1165,9 @@ var pttBtn = document.getElementById('ptt');
 pttBtn.addEventListener('pointerdown', startRecording);
 pttBtn.addEventListener('pointerup', stopRecording);
 pttBtn.addEventListener('pointerleave', function(){ if(recording) stopRecording(); });
+pttBtn.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+pttBtn.addEventListener('touchstart', function(e){ e.preventDefault(); startRecording(); }, { passive:false });
+pttBtn.addEventListener('touchend', function(e){ e.preventDefault(); stopRecording(); }, { passive:false });
 
 // ---------- WebRTC: sinalização ----------
 var ICE_SERVERS = { iceServers:[
@@ -1168,65 +1183,8 @@ function setupRTC(){
   rtcChannel.on('broadcast', { event:'signal' }, function(msg){ handleSignal(msg.payload); }).subscribe();
 }
 function teardownRTC(){
-  stopWalkieLive();
   endCall(true);
   if(rtcChannel){ sb.removeChannel(rtcChannel); rtcChannel = null; }
-}
-
-// ---------- walkie-talkie AO VIVO (transmite pra todo mundo enquanto segura) ----------
-var walkiePeers = {};
-var localWalkieStream = null;
-var walkieActive = false;
-function startWalkieLive(){
-  if(walkieActive || !sb) return;
-  navigator.mediaDevices.getUserMedia({ audio:true }).then(function(stream){
-    localWalkieStream = stream;
-    walkieActive = true;
-    document.getElementById('walkie-btn').classList.add('active');
-    Object.keys(squad).forEach(function(peerId){ startWalkiePeer(peerId); });
-  }).catch(function(){ addMessage('Sistema', 'Permissão de microfone negada.', null, false); });
-}
-function startWalkiePeer(peerId){
-  var pc = new RTCPeerConnection(ICE_SERVERS);
-  walkiePeers[peerId] = pc;
-  localWalkieStream.getTracks().forEach(function(t){ pc.addTrack(t, localWalkieStream); });
-  pc.onicecandidate = function(e){ if(e.candidate) sendSignal({ to:peerId, from:myId, type:'ice-walkie', candidate:e.candidate }); };
-  pc.createOffer().then(function(o){ return pc.setLocalDescription(o); }).then(function(){
-    sendSignal({ to:peerId, from:myId, type:'walkie-offer', sdp:pc.localDescription, name:callsignEl().value || 'VOCÊ' });
-  });
-}
-function stopWalkieLive(){
-  if(!walkieActive) return;
-  walkieActive = false;
-  document.getElementById('walkie-btn').classList.remove('active');
-  Object.keys(walkiePeers).forEach(function(id){
-    sendSignal({ to:id, from:myId, type:'walkie-end' });
-    walkiePeers[id].close(); delete walkiePeers[id];
-  });
-  if(localWalkieStream){ localWalkieStream.getTracks().forEach(function(t){ t.stop(); }); localWalkieStream = null; }
-}
-var walkieBtn = document.getElementById('walkie-btn');
-walkieBtn.addEventListener('pointerdown', startWalkieLive);
-walkieBtn.addEventListener('pointerup', stopWalkieLive);
-walkieBtn.addEventListener('pointerleave', function(){ if(walkieActive) stopWalkieLive(); });
-
-// quem recebe o walkie ao vivo (lado de quem está ouvindo)
-var walkieListeners = {};
-function acceptWalkiePeer(fromId, sdp, name){
-  var pc = new RTCPeerConnection(ICE_SERVERS);
-  walkieListeners[fromId] = pc;
-  var audioEl = document.createElement('audio'); audioEl.autoplay = true;
-  pc.ontrack = function(e){ audioEl.srcObject = e.streams[0]; document.body.appendChild(audioEl); };
-  pc.onicecandidate = function(e){ if(e.candidate) sendSignal({ to:fromId, from:myId, type:'ice-walkie', candidate:e.candidate }); };
-  pc.setRemoteDescription(new RTCSessionDescription(sdp)).then(function(){ return pc.createAnswer(); })
-    .then(function(a){ return pc.setLocalDescription(a); })
-    .then(function(){ sendSignal({ to:fromId, from:myId, type:'walkie-answer', sdp:pc.localDescription }); });
-  showBigAlert('📡 ' + (name || 'Alguém') + ' está no walkie-talkie...', false);
-  pc._audioEl = audioEl;
-}
-function endWalkieListener(fromId){
-  var pc = walkieListeners[fromId];
-  if(pc){ if(pc._audioEl) pc._audioEl.remove(); pc.close(); delete walkieListeners[fromId]; }
 }
 
 // ---------- chamada 1-a-1 (áudio/vídeo) ----------
@@ -1262,14 +1220,7 @@ document.getElementById('call-end-btn').addEventListener('click', function(){ en
 
 function handleSignal(msg){
   if(!msg || (msg.to !== myId && msg.to !== 'all')) return;
-  if(msg.type === 'walkie-offer'){ acceptWalkiePeer(msg.from, msg.sdp, msg.name); }
-  else if(msg.type === 'walkie-answer'){ var p = walkiePeers[msg.from]; if(p) p.setRemoteDescription(new RTCSessionDescription(msg.sdp)); }
-  else if(msg.type === 'ice-walkie'){
-    var pw = walkiePeers[msg.from] || walkieListeners[msg.from];
-    if(pw && msg.candidate) pw.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(function(){});
-  }
-  else if(msg.type === 'walkie-end'){ endWalkieListener(msg.from); }
-  else if(msg.type === 'call-offer'){
+  if(msg.type === 'call-offer'){
     if(callState){ sendSignal({ to:msg.from, from:myId, type:'call-decline' }); return; }
     if(confirm((msg.name || 'Alguém') + ' está te chamando' + (msg.video ? ' (vídeo)' : ' (áudio)') + '. Atender?')){
       navigator.mediaDevices.getUserMedia({ audio:true, video:!!msg.video }).then(function(stream){
