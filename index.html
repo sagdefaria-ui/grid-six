@@ -220,6 +220,35 @@
   .msg-me{align-self:flex-end; background:rgba(91,184,232,.16); border:0.5px solid rgba(91,184,232,.4);}
   .msg-sender{font-family:var(--mono); font-size:10px; font-weight:700; color:var(--text-muted); margin-bottom:2px;}
   .msg audio{height:30px; width:190px; margin-top:2px;}
+  .msg img{max-width:180px; max-height:180px; border-radius:8px; margin-top:4px; display:block; cursor:pointer;}
+  .msg{position:relative;}
+  .msg-del{
+    position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%;
+    background:var(--panel); border:0.5px solid var(--border-strong); color:var(--text-muted);
+    font-size:10px; display:flex; align-items:center; justify-content:center; padding:0;
+  }
+  #photo-btn{
+    flex-shrink:0; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
+    color:var(--text-secondary); font-size:16px; padding:0 10px;
+  }
+  #retention-row{
+    padding:0 14px 12px; flex-shrink:0; display:flex; align-items:center; gap:8px;
+    font-size:11px; color:var(--text-muted); flex-wrap:wrap;
+  }
+  #retention-select{
+    background:var(--panel-2); border:0.5px solid var(--border); border-radius:6px;
+    color:var(--text-secondary); font-family:var(--sans); font-size:11px; padding:4px 6px;
+  }
+  #photo-viewer{
+    position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.92); display:none;
+    align-items:center; justify-content:center;
+  }
+  #photo-viewer img{ max-width:94vw; max-height:88vh; object-fit:contain; border-radius:6px; }
+  #photo-viewer-close{
+    position:absolute; top:calc(env(safe-area-inset-top,0px) + 14px); right:16px;
+    width:38px; height:38px; border-radius:50%; background:var(--panel); border:0.5px solid var(--border-strong);
+    color:var(--text-primary); font-size:16px;
+  }
   #chat-bar{display:flex; gap:8px; padding:10px 14px 6px; flex-shrink:0;}
   #chat-bar input{
     flex:1; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
@@ -384,11 +413,28 @@
   <div id="comms-panel">
     <div id="chat-log"></div>
     <div id="chat-bar">
+      <button id="photo-btn" title="Enviar foto">📷</button>
       <input id="chat-input" placeholder="Mensagem para a party">
       <button id="chat-send">Enviar</button>
     </div>
+    <input type="file" id="photo-input" accept="image/*" style="display:none">
     <div id="ptt-row"><button id="ptt"><span class="rec-dot"></span><span id="ptt-label">🎙️ Segure para falar</span></button></div>
     <div id="ptt-note">Envio pode levar um segundo — depende da sua conexão.</div>
+    <div id="retention-row">
+      <span>Excluir mensagens automaticamente após</span>
+      <select id="retention-select">
+        <option value="1">1 hora</option>
+        <option value="6">6 horas</option>
+        <option value="24">24 horas</option>
+        <option value="168">7 dias</option>
+        <option value="0">Nunca</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="photo-viewer">
+    <button id="photo-viewer-close">✕</button>
+    <img id="photo-viewer-img" src="">
   </div>
 
   <div id="party-panel">
@@ -1051,10 +1097,14 @@ document.getElementById('wp-confirm').addEventListener('click', function(){
 });
 
 // ---------- comunicação ----------
-function addMessage(sender, text, audio, isMe, kind){
-  messages.push({ sender:sender, text:text, audio:audio, isMe: !!isMe, kind:kind||'chat' });
+function addMessage(opts){
+  messages.push({
+    id: opts.id || null, sender: opts.sender, text: opts.text || null, audio: opts.audio || null,
+    image: opts.image || null, isMe: !!opts.isMe, kind: opts.kind || 'chat',
+    audioPath: opts.audioPath || null, imagePath: opts.imagePath || null
+  });
   if(activeTab==='comms') renderChat();
-  else if(!isMe){
+  else if(!opts.isMe){
     var t = document.querySelector('.tab[data-tab="comms"]');
     if(t) t.classList.add('has-unread');
   }
@@ -1066,6 +1116,25 @@ function showBigAlert(text, isKia){
   el.style.display = 'block';
   clearTimeout(el._t);
   el._t = setTimeout(function(){ el.style.display = 'none'; }, 6000);
+}
+function openPhotoViewer(url){
+  document.getElementById('photo-viewer-img').src = url;
+  document.getElementById('photo-viewer').style.display = 'flex';
+}
+document.getElementById('photo-viewer-close').addEventListener('click', function(){
+  document.getElementById('photo-viewer').style.display = 'none';
+});
+function deleteMessageLocal(id){
+  messages = messages.filter(function(m){ return m.id !== id; });
+  renderChat();
+}
+function deleteMessage(m){
+  if(!confirm('Excluir essa mensagem pra todo mundo da party?')) return;
+  deleteMessageLocal(m.id);
+  if(!sb || !m.id) return;
+  sb.from('messages').delete().eq('id', m.id).then(function(){});
+  if(m.audioPath) sb.storage.from('audio').remove([m.audioPath]).then(function(){});
+  if(m.imagePath) sb.storage.from('photos').remove([m.imagePath]).then(function(){});
 }
 function renderChat(){
   var log = document.getElementById('chat-log');
@@ -1082,6 +1151,16 @@ function renderChat(){
     if(m.text) html += '<div>' + m.text + '</div>';
     if(m.audio) html += '<audio controls src="' + m.audio.url + '"></audio>';
     b.innerHTML = html;
+    if(m.image){
+      var img = document.createElement('img'); img.src = m.image.url;
+      img.addEventListener('click', function(){ openPhotoViewer(m.image.url); });
+      b.appendChild(img);
+    }
+    if(m.isMe && m.id){
+      var del = document.createElement('button'); del.className = 'msg-del'; del.textContent = '✕';
+      del.addEventListener('click', function(){ deleteMessage(m); });
+      b.appendChild(del);
+    }
     log.appendChild(b);
   });
   log.scrollTop = log.scrollHeight;
@@ -1095,11 +1174,33 @@ function sendChat(){
   input.value = '';
   if(sb){
     sb.from('messages').insert({ party_code:partyCode, sender: callsignEl().value || 'VOCÊ', body: val }).then(function(res){
-      if(res.error) addMessage(callsignEl().value || 'VOCÊ', val, null, true);
+      if(res.error) addMessage({ sender: callsignEl().value || 'VOCÊ', text:val, isMe:true });
     });
   } else {
-    addMessage(callsignEl().value || 'VOCÊ', val, null, true);
+    addMessage({ sender: callsignEl().value || 'VOCÊ', text:val, isMe:true });
   }
+}
+
+document.getElementById('photo-btn').addEventListener('click', function(){
+  document.getElementById('photo-input').click();
+});
+document.getElementById('photo-input').addEventListener('change', function(e){
+  var f = e.target.files && e.target.files[0];
+  this.value = '';
+  if(f) sendPhoto(f);
+});
+function sendPhoto(file){
+  var sender = callsignEl().value || 'VOCÊ';
+  if(!sb){ addMessage({ sender:sender, image:{ url:URL.createObjectURL(file) }, isMe:true }); return; }
+  var ext = (file.type.split('/')[1] || 'jpg').split('+')[0];
+  var path = partyCode + '/' + Date.now() + '-' + myId + '.' + ext;
+  sb.storage.from('photos').upload(path, file, { contentType:file.type || 'image/jpeg' }).then(function(res){
+    if(res.error){ addMessage({ sender:'Sistema', text:'Falha ao enviar foto: ' + res.error.message }); return; }
+    var pub = sb.storage.from('photos').getPublicUrl(path);
+    sb.from('messages').insert({ party_code:partyCode, sender:sender, image_url:pub.data.publicUrl, image_path:path }).then(function(res2){
+      if(res2.error) addMessage({ sender:sender, image:{ url:pub.data.publicUrl }, isMe:true, imagePath:path });
+    });
+  });
 }
 
 var mediaRecorder, audioChunks=[], recording=false;
@@ -1138,7 +1239,7 @@ function startRecording(){
     window._pttSafety = setTimeout(function(){ if(recording) stopRecording(); }, 60000);
   }).catch(function(){
     wantsRecording = false;
-    addMessage('Sistema', 'Permissão de microfone negada.', null, false);
+    addMessage({ sender:'Sistema', text:'Permissão de microfone negada.' });
   });
 }
 function stopRecording(){
@@ -1153,16 +1254,16 @@ function stopRecording(){
     var ext = mime.indexOf('mp4') > -1 ? 'm4a' : (mime.indexOf('ogg') > -1 ? 'ogg' : (mime.indexOf('aac') > -1 ? 'aac' : 'webm'));
     var blob = new Blob(audioChunks, { type: mime });
     mediaRecorder.stream.getTracks().forEach(function(t){ t.stop(); });
-    if(blob.size === 0){ addMessage('Sistema', 'Gravação vazia, tente de novo.', null, false); return; }
+    if(blob.size === 0){ addMessage({ sender:'Sistema', text:'Gravação vazia, tente de novo.' }); return; }
     var sender = callsignEl().value || 'VOCÊ';
-    if(!sb){ addMessage(sender, null, { url:URL.createObjectURL(blob) }, true); return; }
+    if(!sb){ addMessage({ sender:sender, audio:{ url:URL.createObjectURL(blob) }, isMe:true }); return; }
     var path = partyCode + '/' + Date.now() + '-' + myId + '.' + ext;
     sb.storage.from('audio').upload(path, blob, { contentType:mime }).then(function(res){
-      if(res.error){ addMessage('Sistema', 'Falha ao enviar áudio: ' + res.error.message, null, false); return; }
+      if(res.error){ addMessage({ sender:'Sistema', text:'Falha ao enviar áudio: ' + res.error.message }); return; }
       var pub = sb.storage.from('audio').getPublicUrl(path);
       var url = pub.data.publicUrl;
-      sb.from('messages').insert({ party_code:partyCode, sender:sender, audio_url:url }).then(function(res2){
-        if(res2.error) addMessage(sender, null, { url:url }, true);
+      sb.from('messages').insert({ party_code:partyCode, sender:sender, audio_url:url, audio_path:path }).then(function(res2){
+        if(res2.error) addMessage({ sender:sender, audio:{ url:url }, isMe:true, audioPath:path });
       });
     });
   };
@@ -1442,6 +1543,27 @@ function pushMyPosition(force){
 }
 setInterval(function(){ pushMyPosition(); }, 3000);
 
+// ---------- limpeza automática de mensagens antigas ----------
+var msgRetentionHours = parseInt(localStorage.getItem('gridsix-msg-retention-hours') || '24', 10);
+var retentionSelect = document.getElementById('retention-select');
+retentionSelect.value = String(msgRetentionHours);
+retentionSelect.addEventListener('change', function(){
+  msgRetentionHours = parseInt(this.value, 10);
+  localStorage.setItem('gridsix-msg-retention-hours', String(msgRetentionHours));
+  cleanupOldMessages();
+});
+function cleanupOldMessages(){
+  if(!sb || !msgRetentionHours) return;
+  var cutoff = new Date(Date.now() - msgRetentionHours * 3600000).toISOString();
+  sb.from('messages').select('id,audio_path,image_path').eq('party_code', partyCode).lt('created_at', cutoff).then(function(res){
+    (res.data || []).forEach(function(m){
+      if(m.audio_path) sb.storage.from('audio').remove([m.audio_path]).then(function(){});
+      if(m.image_path) sb.storage.from('photos').remove([m.image_path]).then(function(){});
+    });
+    sb.from('messages').delete().eq('party_code', partyCode).lt('created_at', cutoff).then(function(){});
+  });
+}
+
 function loadPartyData(){
   if(!sb) return;
   sb.from('players').select('*').eq('party_code', partyCode).then(function(res){
@@ -1452,10 +1574,17 @@ function loadPartyData(){
   });
   sb.from('messages').select('*').eq('party_code', partyCode).order('created_at', { ascending:true }).limit(50).then(function(res){
     (res.data || []).forEach(function(m){
-      addMessage(m.sender, m.body, m.audio_url ? { url:m.audio_url } : null, m.sender === (callsignEl().value || 'VOCÊ'), m.kind);
+      addMessage({
+        id:m.id, sender:m.sender, text:m.body,
+        audio: m.audio_url ? { url:m.audio_url } : null,
+        image: m.image_url ? { url:m.image_url } : null,
+        isMe: m.sender === (callsignEl().value || 'VOCÊ'), kind:m.kind,
+        audioPath:m.audio_path, imagePath:m.image_path
+      });
       if(m.kind === 'alert' && typeof m.lat === 'number' && typeof m.lng === 'number') plotAlertPing(m.id, m.lat, m.lng, m.sender);
     });
   });
+  cleanupOldMessages();
 }
 
 function subscribeParty(){
@@ -1481,12 +1610,20 @@ function subscribeParty(){
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages', filter:'party_code=eq.' + partyCode }, function(payload){
       var m = payload.new;
       var isMe = m.sender === (callsignEl().value || 'VOCÊ');
-      addMessage(m.sender, m.body, m.audio_url ? { url:m.audio_url } : null, isMe, m.kind);
+      addMessage({
+        id:m.id, sender:m.sender, text:m.body,
+        audio: m.audio_url ? { url:m.audio_url } : null,
+        image: m.image_url ? { url:m.image_url } : null,
+        isMe:isMe, kind:m.kind, audioPath:m.audio_path, imagePath:m.image_path
+      });
       if(m.kind === 'kia') showBigAlert('💀 ' + m.sender + ' foi eliminado(a)', true);
       else if(m.kind === 'alert'){
         showBigAlert('🚨 ' + m.sender + ' marcou uma posição no mapa', false);
         if(typeof m.lat === 'number' && typeof m.lng === 'number') plotAlertPing(m.id, m.lat, m.lng, m.sender);
       }
+    })
+    .on('postgres_changes', { event:'DELETE', schema:'public', table:'messages', filter:'party_code=eq.' + partyCode }, function(payload){
+      deleteMessageLocal(payload.old.id);
     }).subscribe();
 }
 
