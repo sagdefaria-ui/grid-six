@@ -485,7 +485,7 @@ document.getElementById('callsign').value = savedName;
 
 // ---------- estado ----------
 var fmt = 'gps'; // 'gps' | 'mgrs'
-var you = { lat: -23.5505, lng: -46.6333, hasFix:false, alt:null };
+var you = { lat: -23.5505, lng: -46.6333, hasFix:false, alt:null, groundElev:null, agl:null };
 var squad = {};       // id -> {id,name,lat,lng,updated_at}
 var waypoints = {};   // id -> {id,label,lat,lng,icon,color}
 var messages = [];
@@ -723,12 +723,35 @@ if(navigator.geolocation){
   navigator.geolocation.watchPosition(function(pos){
     you.lat = pos.coords.latitude; you.lng = pos.coords.longitude; you.hasFix = true;
     you.alt = (typeof pos.coords.altitude === 'number' && !isNaN(pos.coords.altitude)) ? pos.coords.altitude : null;
+    maybeFetchGroundElevation();
     youMarker.setLatLng([you.lat, you.lng]);
     if(!you._centered){ map.setView([you.lat, you.lng], 17); you._centered = true; }
     if(activeTab==='squad') renderList();
     updateTrack();
     pushMyPosition();
   }, function(){ /* permissão negada: fica no centro padrão */ }, { enableHighAccuracy:true, maximumAge:2000 });
+}
+
+// ---------- altitude em relação ao solo ----------
+var lastElevLookup = null;
+function maybeFetchGroundElevation(){
+  if(you.alt == null) return;
+  if(lastElevLookup){
+    var d = distBearing(you.lat, you.lng, lastElevLookup.lat, lastElevLookup.lng).dist;
+    if(d < 30) return;
+  }
+  lastElevLookup = { lat:you.lat, lng:you.lng };
+  fetch('https://api.open-elevation.com/api/v1/lookup?locations=' + you.lat + ',' + you.lng)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      var elev = data && data.results && data.results[0] && data.results[0].elevation;
+      if(typeof elev === 'number'){
+        you.groundElev = elev;
+        you.agl = you.alt - elev;
+        pushMyPosition(true);
+        if(activeTab === 'squad') renderList();
+      }
+    }).catch(function(){ /* serviço de elevação fora do ar, ignora e segue sem altura do solo */ });
 }
 
 // ---------- bússola ----------
@@ -795,7 +818,12 @@ applyOrientation();
 function toMGRS(lat, lng){ try{ return mgrs.forward([lng, lat]); } catch(e){ return '—'; } }
 function fromMGRS(str){ var p = mgrs.toPoint(str.replace(/\s+/g,'')); return { lat:p[1], lng:p[0] }; }
 function fmtCoord(lat, lng){ if(fmt === 'mgrs') return toMGRS(lat, lng); return lat.toFixed(5) + ', ' + lng.toFixed(5); }
-function fmtAlt(alt){ return (typeof alt === 'number' && !isNaN(alt)) ? (' · ⛰' + Math.round(alt) + 'm') : ''; }
+function fmtAlt(alt, agl){
+  var s = '';
+  if(typeof alt === 'number' && !isNaN(alt)) s += ' · ⛰' + Math.round(alt) + 'm';
+  if(typeof agl === 'number' && !isNaN(agl)) s += ' (' + Math.round(agl) + 'm do solo)';
+  return s;
+}
 function distBearing(lat1,lng1,lat2,lng2){
   var R=6371000, toRad=Math.PI/180;
   var dLat=(lat2-lat1)*toRad, dLng=(lng2-lng1)*toRad;
@@ -821,13 +849,17 @@ function renderList(){
 
   list.innerHTML = '';
   if(activeTab === 'squad'){
+    list.appendChild(youAltRow());
     var ids = Object.keys(squad);
     ids.forEach(function(id){
       var s = squad[id];
       var db = distBearing(you.lat, you.lng, s.lat, s.lng);
-      list.appendChild(rowEl(s.name, fmtCoord(s.lat, s.lng) + fmtAlt(s.altitude), db.dist + ' m', db.brng + '°', s.lat, s.lng, s.id, 'squad', false, 'var(--squad)', false));
+      list.appendChild(rowEl(s.name, fmtCoord(s.lat, s.lng) + fmtAlt(s.altitude, s.agl), db.dist + ' m', db.brng + '°', s.lat, s.lng, s.id, 'squad', false, 'var(--squad)', false));
     });
-    if(ids.length===0) list.innerHTML = '<div class="empty">Ninguém mais na sua party ainda. Compartilhe o código na aba Party.</div>';
+    if(ids.length===0){
+      var e = document.createElement('div'); e.className='empty'; e.textContent='Ninguém mais na sua party ainda. Compartilhe o código na aba Party.';
+      list.appendChild(e);
+    }
   } else {
     var wids = Object.keys(waypoints);
     var tb = document.createElement('div'); tb.className='list-toolbar';
@@ -872,6 +904,15 @@ function focusOn(lat, lng, id, group){
     var pinEl = el && (el.querySelector('.pin') || el.querySelector('.pin-custom'));
     if(pinEl){ pinEl.classList.add('pulse-target'); setTimeout(function(){ pinEl.classList.remove('pulse-target'); }, 1400); }
   }
+}
+function youAltRow(){
+  var row = document.createElement('div'); row.className = 'row'; row.style.cursor = 'default';
+  var sw = document.createElement('div'); sw.className = 'swatch'; sw.style.background = 'var(--you)';
+  var main = document.createElement('div'); main.className = 'row-main';
+  var altInfo = fmtAlt(you.alt, you.agl);
+  main.innerHTML = '<div class="row-name">' + (callsignEl().value || 'VOCÊ') + ' (você)</div><div class="row-coord">' + fmtCoord(you.lat, you.lng) + (altInfo || ' · altitude indisponível') + '</div>';
+  row.appendChild(sw); row.appendChild(main);
+  return row;
 }
 function rowEl(name, coord, distStr, brngStr, lat, lng, id, group, deletable, color, hidden){
   var row = document.createElement('div'); row.className='row';
@@ -1203,7 +1244,7 @@ function pushMyPosition(force){
   lastPush = now;
   sb.from('players').upsert({
     id:myId, party_code:partyCode, name: callsignEl().value || 'VOCÊ',
-    lat:you.lat, lng:you.lng, heading:youHeading, altitude:you.alt, updated_at:new Date().toISOString()
+    lat:you.lat, lng:you.lng, heading:youHeading, altitude:you.alt, agl:you.agl, updated_at:new Date().toISOString()
   }).then(function(res){
     setSyncStatus(!res.error, res.error ? 'sem conexão' : (Object.keys(squad).length) + ' na malha');
   });
