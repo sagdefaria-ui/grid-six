@@ -1115,9 +1115,12 @@ function fmtRecTime(ms){
   var s = Math.floor(ms/1000);
   return Math.floor(s/60) + ':' + (s%60<10?'0':'') + (s%60);
 }
+var wantsRecording = false;
 function startRecording(){
   if(recording) return;
+  wantsRecording = true;
   navigator.mediaDevices.getUserMedia({ audio:true }).then(function(stream){
+    if(!wantsRecording){ stream.getTracks().forEach(function(t){ t.stop(); }); return; }
     var mime = pickMimeType();
     try{ mediaRecorder = mime ? new MediaRecorder(stream, { mimeType:mime }) : new MediaRecorder(stream); }
     catch(e){ mediaRecorder = new MediaRecorder(stream); }
@@ -1131,11 +1134,15 @@ function startRecording(){
     recTimerInt = setInterval(function(){
       document.getElementById('ptt-label').textContent = 'Gravando... ' + fmtRecTime(Date.now() - recStartTs);
     }, 250);
+    clearTimeout(window._pttSafety);
+    window._pttSafety = setTimeout(function(){ if(recording) stopRecording(); }, 60000);
   }).catch(function(){
+    wantsRecording = false;
     addMessage('Sistema', 'Permissão de microfone negada.', null, false);
   });
 }
 function stopRecording(){
+  wantsRecording = false;
   if(!recording || !mediaRecorder) return;
   recording = false;
   clearInterval(recTimerInt);
@@ -1159,15 +1166,18 @@ function stopRecording(){
       });
     });
   };
-  mediaRecorder.stop();
+  if(mediaRecorder.state === 'recording') mediaRecorder.stop();
 }
 var pttBtn = document.getElementById('ptt');
-pttBtn.addEventListener('pointerdown', startRecording);
-pttBtn.addEventListener('pointerup', stopRecording);
-pttBtn.addEventListener('pointerleave', function(){ if(recording) stopRecording(); });
 pttBtn.addEventListener('contextmenu', function(e){ e.preventDefault(); });
-pttBtn.addEventListener('touchstart', function(e){ e.preventDefault(); startRecording(); }, { passive:false });
-pttBtn.addEventListener('touchend', function(e){ e.preventDefault(); stopRecording(); }, { passive:false });
+pttBtn.addEventListener('pointerdown', function(e){
+  e.preventDefault();
+  try{ pttBtn.setPointerCapture(e.pointerId); }catch(err){}
+  startRecording();
+});
+pttBtn.addEventListener('pointerup', stopRecording);
+pttBtn.addEventListener('pointercancel', stopRecording);
+pttBtn.addEventListener('pointerleave', function(){ if(recording) stopRecording(); });
 
 // ---------- WebRTC: sinalização ----------
 var ICE_SERVERS = { iceServers:[
