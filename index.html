@@ -557,6 +557,7 @@
 </div>
 
 <input type="file" id="kml-input" accept=".kml,application/vnd.google-earth.kml+xml" style="display:none">
+<input type="file" id="intel-input" accept="application/pdf,image/*" style="display:none">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1037,6 +1038,9 @@ function renderList(){
     var importBtn = document.createElement('button'); importBtn.style.color = 'var(--text-secondary)'; importBtn.textContent = 'Importar KML';
     importBtn.addEventListener('click', function(){ document.getElementById('kml-input').click(); });
     tb.appendChild(importBtn);
+    var intelBtn = document.createElement('button'); intelBtn.id = 'intel-btn'; intelBtn.style.color = 'var(--you)'; intelBtn.textContent = '🤖 Ler documento (IA)';
+    intelBtn.addEventListener('click', function(){ document.getElementById('intel-input').click(); });
+    tb.appendChild(intelBtn);
     list.appendChild(tb);
     if(wids.length===0){ list.innerHTML += '<div class="empty">Toque no botão 📍 e depois no mapa pra plotar um ponto</div>'; return; }
     wids.forEach(function(id){
@@ -1570,6 +1574,46 @@ document.getElementById('kml-input').addEventListener('change', function(e){
   if(f) importKMLFile(f);
   this.value = '';
 });
+
+// ---------- leitura de documento de inteligência via IA ----------
+var INTEL_FN_URL = 'https://oxakoccszlcdxayiuhun.supabase.co/functions/v1/parse-intel';
+document.getElementById('intel-input').addEventListener('change', function(e){
+  var f = e.target.files && e.target.files[0];
+  this.value = '';
+  if(f) importIntelDoc(f);
+});
+function importIntelDoc(file){
+  var btn = document.getElementById('intel-btn');
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    var base64 = ev.target.result.split(',')[1];
+    var original = btn.textContent;
+    btn.textContent = '🤖 Analisando...'; btn.disabled = true;
+    fetch(INTEL_FN_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ mimeType: file.type || 'application/pdf', data: base64 })
+    }).then(function(r){ return r.json(); }).then(function(res){
+      btn.textContent = original; btn.disabled = false;
+      if(res.error){ alert('A IA não conseguiu ler esse documento: ' + res.error); return; }
+      var count = 0;
+      (res.pontos || []).forEach(function(p){
+        if(!p.mgrs) return;
+        try{
+          var ll = fromMGRS(p.mgrs);
+          commitWaypoint(ll.lat, ll.lng, p.nome || ('PT-' + (Object.keys(waypoints).length + 1)), '📄', '#5BB8E8');
+          count++;
+        } catch(err){ /* coordenada MGRS invalida, pula */ }
+      });
+      switchTab('points');
+      alert((res.resumo || 'Documento lido, sem resumo disponível.') + '\n\n' + count + ' ponto(s) MGRS plotado(s) automaticamente.');
+    }).catch(function(err){
+      btn.textContent = original; btn.disabled = false;
+      alert('Falha ao conectar com a IA: ' + err.message);
+    });
+  };
+  reader.readAsDataURL(file);
+}
 
 var lastPush = 0;
 function pushMyPosition(force){
