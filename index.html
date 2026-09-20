@@ -194,6 +194,14 @@
   }
   #kia-btn:active{ background:var(--panel-2); }
   body.landscape #kia-btn{ bottom:190px; right:calc(360px + 16px); }
+  #kill-btn-float{
+    position:absolute; z-index:499; width:46px; height:46px; border-radius:50%;
+    background:var(--panel); border:0.5px solid var(--border-strong); font-size:17px;
+    display:flex; align-items:center; justify-content:center; right:14px;
+    bottom:calc(50vh + 16px + 232px); color:var(--ok);
+  }
+  #kill-btn-float:active{ background:var(--panel-2); }
+  body.landscape #kill-btn-float{ bottom:248px; right:calc(360px + 16px); }
   #big-alert{
     position:absolute; top:50%; left:12px; right:12px; transform:translateY(-50%); z-index:900;
     background:rgba(20,10,8,.95); border:1.5px solid var(--danger); border-radius:14px;
@@ -304,6 +312,25 @@
     border-radius:8px; width:38px; height:38px; font-size:16px; margin-left:8px;
   }
   #app-credit{ text-align:center; font-size:10px; color:var(--text-muted); padding:4px 14px 10px; }
+  #score-box{
+    margin:0 14px 10px; padding:12px; background:var(--panel-2); border:0.5px dashed var(--border-strong);
+    border-radius:8px; flex-shrink:0;
+  }
+  #score-buttons{ display:flex; gap:8px; }
+  #score-buttons button{
+    flex:1; padding:10px; border-radius:8px; font-family:var(--sans); font-size:12.5px; font-weight:600; border:none;
+  }
+  #kill-btn{ background:var(--ok); color:#0E1F06; }
+  #death-btn{ background:var(--danger); color:#2A0A05; }
+  #new-match-btn{
+    width:100%; margin-top:8px; padding:8px; border-radius:8px; background:var(--panel); border:0.5px solid var(--border-strong);
+    color:var(--text-secondary); font-family:var(--sans); font-size:11.5px;
+  }
+  #score-leaderboard{ margin-top:10px; }
+  .lb-row{ display:flex; align-items:center; gap:8px; padding:6px 0; border-top:0.5px solid var(--border); font-size:12px; }
+  .lb-row.me{ color:var(--you); font-weight:600; }
+  .lb-name{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lb-num{ font-family:var(--mono); font-size:11px; color:var(--text-secondary); width:34px; text-align:right; }
     width:100%; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
     color:var(--text-primary); font-family:var(--sans); font-size:14px; padding:9px 10px;
   }
@@ -379,6 +406,7 @@
 <button id="layer-toggle" title="Alternar mapa/satélite">🛰️</button>
 <button id="add-point-btn" title="Adicionar ponto">📍</button>
 <button id="kia-btn" title="Avisar que fui eliminado">💀</button>
+<button id="kill-btn-float" title="Marquei um kill">🎯</button>
 <div id="big-alert"></div>
 <button id="immersive-btn" title="Esconder menus">⛶</button>
 
@@ -453,6 +481,15 @@
         <button id="timer-toggle" title="Iniciar/pausar">▶</button>
         <button id="timer-reset" title="Zerar">↺</button>
       </div>
+    </div>
+    <div id="score-box">
+      <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px;">🎮 <span id="match-status">Nenhuma partida ativa</span></div>
+      <div id="score-buttons">
+        <button id="kill-btn">🎯 +1 Kill</button>
+        <button id="death-btn">💀 +1 Morte</button>
+      </div>
+      <button id="new-match-btn">Iniciar novo jogo</button>
+      <div id="score-leaderboard"></div>
     </div>
     <div id="party-code">
       <div>Sua party <span class="code" id="party-code-val">—</span></div>
@@ -838,6 +875,98 @@ document.getElementById('timer-reset').addEventListener('click', function(){
   updateTimerDisplay();
 });
 
+// ---------- placar de kills/mortes (sincronizado com a party) ----------
+var currentMatch = null;
+var matchScores = {};
+var matchesChannel = null, scoresChannel = null;
+function computeKD(k, d){ return d > 0 ? (k / d).toFixed(2) : k.toFixed(2); }
+function renderScore(){
+  document.getElementById('match-status').textContent = currentMatch ? ('Partida ativa: ' + (currentMatch.name || '(sem nome)')) : 'Nenhuma partida ativa';
+  var lb = document.getElementById('score-leaderboard');
+  lb.innerHTML = '';
+  var rows = Object.keys(matchScores).map(function(pid){ return matchScores[pid]; });
+  rows.sort(function(a,b){ return (b.kills - b.deaths) - (a.kills - a.deaths); });
+  if(currentMatch && rows.length === 0){
+    var e = document.createElement('div'); e.className = 'empty'; e.textContent = 'Ninguém marcou nada ainda nessa partida.';
+    lb.appendChild(e);
+  }
+  rows.forEach(function(r){
+    var row = document.createElement('div'); row.className = 'lb-row' + (r.player_id === myId ? ' me' : '');
+    var name = document.createElement('div'); name.className = 'lb-name'; name.textContent = r.player_name;
+    var k = document.createElement('div'); k.className = 'lb-num'; k.textContent = r.kills + ' K';
+    var d = document.createElement('div'); d.className = 'lb-num'; d.textContent = r.deaths + ' D';
+    var kd = document.createElement('div'); kd.className = 'lb-num'; kd.textContent = computeKD(r.kills, r.deaths);
+    row.appendChild(name); row.appendChild(k); row.appendChild(d); row.appendChild(kd);
+    lb.appendChild(row);
+  });
+}
+function loadMatchScores(){
+  matchScores = {};
+  if(!sb || !currentMatch){ renderScore(); return; }
+  sb.from('match_scores').select('*').eq('match_id', currentMatch.id).then(function(res){
+    (res.data || []).forEach(function(r){ matchScores[r.player_id] = r; });
+    renderScore();
+  });
+}
+function subscribeMatchScores(){
+  if(scoresChannel){ sb.removeChannel(scoresChannel); scoresChannel = null; }
+  if(!sb || !currentMatch) return;
+  scoresChannel = sb.channel('scores-' + currentMatch.id)
+    .on('postgres_changes', { event:'*', schema:'public', table:'match_scores', filter:'match_id=eq.' + currentMatch.id }, function(payload){
+      if(payload.eventType === 'DELETE'){ delete matchScores[payload.old.player_id]; }
+      else { matchScores[payload.new.player_id] = payload.new; }
+      renderScore();
+    }).subscribe();
+}
+function loadCurrentMatch(){
+  if(!sb || !partyCode){ return; }
+  sb.from('matches').select('*').eq('party_code', partyCode).order('started_at', { ascending:false }).limit(1).then(function(res){
+    currentMatch = (res.data && res.data[0]) || null;
+    loadMatchScores();
+    subscribeMatchScores();
+  });
+}
+function subscribeMatches(){
+  if(matchesChannel){ sb.removeChannel(matchesChannel); matchesChannel = null; }
+  if(!sb || !partyCode) return;
+  matchesChannel = sb.channel('matches-' + partyCode)
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'matches', filter:'party_code=eq.' + partyCode }, function(payload){
+      currentMatch = payload.new;
+      showBigAlert('🎮 Nova partida: ' + (currentMatch.name || '(sem nome)'), false);
+      loadMatchScores();
+      subscribeMatchScores();
+    }).subscribe();
+}
+function addKillOrDeath(field, silent){
+  if(!sb){ if(!silent) alert('Precisa estar conectado (não em modo totalmente offline) pra usar o placar.'); return false; }
+  if(!currentMatch){ if(!silent) alert('Nenhuma partida ativa. Toque em "Iniciar novo jogo" na aba Party primeiro.'); return false; }
+  var mine = matchScores[myId] || { kills:0, deaths:0 };
+  var kills = mine.kills || 0, deaths = mine.deaths || 0;
+  if(field === 'kills') kills++; else deaths++;
+  sb.from('match_scores').upsert({
+    match_id: currentMatch.id, player_id: myId, player_name: (callsignEl().value || 'VOCÊ'),
+    kills: kills, deaths: deaths, updated_at: new Date().toISOString()
+  }, { onConflict:'match_id,player_id' }).then(function(res){
+    if(res.error) alert('Falha ao atualizar placar: ' + res.error.message);
+  });
+  return true;
+}
+document.getElementById('kill-btn').addEventListener('click', function(){ addKillOrDeath('kills'); });
+document.getElementById('death-btn').addEventListener('click', function(){ addKillOrDeath('deaths'); });
+document.getElementById('new-match-btn').addEventListener('click', function(){
+  if(!sb){ alert('Precisa estar conectado pra iniciar uma partida.'); return; }
+  var name = prompt('Nome da partida (opcional):', '');
+  if(name === null) return;
+  sb.from('matches').insert({ party_code:partyCode, name: name || null }).select().then(function(res){
+    if(res.error){ alert('Falha ao iniciar partida: ' + res.error.message); return; }
+    currentMatch = res.data[0];
+    matchScores = {};
+    loadMatchScores();
+    subscribeMatchScores();
+  });
+});
+renderScore();
+
 // ---------- modo "adicionar ponto" ----------
 var addPointBtn = document.getElementById('add-point-btn');
 addPointBtn.addEventListener('click', function(){
@@ -892,8 +1021,13 @@ function maybeFetchGroundElevation(){
 }
 
 // ---------- alertas: eliminado ----------
+document.getElementById('kill-btn-float').addEventListener('click', function(){
+  if(addKillOrDeath('kills', true)) showBigAlert('🎯 Kill marcado!', false);
+  else alert('Nenhuma partida ativa. Vá na aba Party e toque em "Iniciar novo jogo".');
+});
 document.getElementById('kia-btn').addEventListener('click', function(){
   if(!confirm('Confirma que você foi eliminado? Isso avisa toda a party agora.')) return;
+  addKillOrDeath('deaths', true);
   var sender = callsignEl().value || 'VOCÊ';
   if(!sb){ addMessage({ sender:sender, text:'está eliminado(a)', kind:'kia', isMe:true }); showBigAlert('💀 Você marcou que foi eliminado', true); return; }
   sb.from('messages').insert({ party_code:partyCode, sender:sender, body:'está eliminado(a)', kind:'kia' }).then(function(res){
@@ -1718,7 +1852,7 @@ function switchParty(code){
   clearSquadMarkers(); clearWaypointMarkers();
   messages = [];
   clearTrack();
-  if(sb){ loadPartyData(); subscribeParty(); pushMyPosition(true); }
+  if(sb){ loadPartyData(); subscribeParty(); pushMyPosition(true); loadCurrentMatch(); subscribeMatches(); }
   renderList();
 }
 
@@ -1736,6 +1870,8 @@ function startPartySync(){
     loadPartyData();
     subscribeParty();
     pushMyPosition(true);
+    loadCurrentMatch();
+    subscribeMatches();
   } else {
     setSyncStatus(false, 'backend indisponível');
   }
