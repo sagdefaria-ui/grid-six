@@ -1969,12 +1969,10 @@ function renderFriends(){
     var main = document.createElement('div'); main.className = 'row-main';
     main.innerHTML = '<div class="row-name">' + (f.callsign || '...') + '</div><div class="row-coord">' + (online ? 'Online' : 'Offline') + '</div>';
     row.appendChild(sw); row.appendChild(main);
-    if(online){
-      var inv = document.createElement('button'); inv.className = 'row-del'; inv.style.width = 'auto'; inv.style.padding = '0 10px'; inv.style.color = 'var(--you)';
-      inv.textContent = 'Convidar';
-      inv.addEventListener('click', function(){ inviteFriend(fid); });
-      row.appendChild(inv);
-    }
+    var inv = document.createElement('button'); inv.className = 'row-del'; inv.style.width = 'auto'; inv.style.padding = '0 10px'; inv.style.color = 'var(--you)';
+    inv.textContent = 'Convidar';
+    inv.addEventListener('click', function(){ inviteFriend(fid); });
+    row.appendChild(inv);
     list.appendChild(row);
   });
 
