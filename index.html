@@ -98,6 +98,9 @@
     content:''; position:absolute; top:4px; left:7px; width:11px; height:6px; border-radius:50%;
     background:rgba(255,255,255,.6); filter:blur(1.2px); transform:rotate(-25deg);
   }
+  .pin-photo{ background-size:cover; background-position:center; background-color:#333; }
+  .pin-photo::after{ display:none; }
+  .pin-squad-3d{ background:radial-gradient(circle at 33% 28%, #FFE3C4 0%, var(--squad) 42%, #5C2A06 100%); }
   .pin-label{
     font-family:var(--mono); font-size:10px; font-weight:700; color:var(--text-primary);
     background:rgba(18,20,15,.85); border:0.5px solid var(--border); border-radius:4px; padding:1px 5px;
@@ -202,6 +205,17 @@
   }
   #kill-btn-float:active{ background:var(--panel-2); }
   body.landscape #kill-btn-float{ bottom:248px; right:calc(360px + 16px); }
+  #joystick-base{
+    position:absolute; z-index:499; width:96px; height:96px; border-radius:50%;
+    background:rgba(20,26,15,0.28); border:1px solid rgba(255,255,255,0.18);
+    left:14px; bottom:calc(50vh + 16px + 16px); touch-action:none;
+  }
+  #joystick-knob{
+    position:absolute; width:42px; height:42px; border-radius:50%;
+    background:rgba(255,255,255,0.35); border:1px solid rgba(255,255,255,0.5);
+    left:27px; top:27px; pointer-events:none;
+  }
+  body.landscape #joystick-base{ bottom:16px; left:14px; }
   #big-alert{
     position:absolute; top:50%; left:12px; right:12px; transform:translateY(-50%); z-index:900;
     background:rgba(20,10,8,.95); border:1.5px solid var(--danger); border-radius:14px;
@@ -344,6 +358,11 @@
   #auth-error{ color:var(--danger); font-size:12px; min-height:16px; margin-bottom:2px; }
   #auth-skip{ width:100%; margin-top:12px; background:none; border:none; color:var(--text-muted); font-size:12px; padding:6px; }
   #friends-panel{display:none; flex-direction:column; flex:1; min-height:0;}
+  #history-panel{display:none; flex-direction:column; flex:1; min-height:0;}
+  #history-list{overflow-y:auto; padding:0 14px 10px; flex:1;}
+  .hist-match{ background:var(--panel-2); border:0.5px solid var(--border-strong); border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+  .hist-match-title{ font-size:12.5px; font-weight:600; color:var(--text-primary); margin-bottom:2px; }
+  .hist-match-date{ font-size:10px; color:var(--text-muted); margin-bottom:8px; }
   #friend-search-bar{display:flex; gap:8px; padding:0 14px 8px; flex-shrink:0;}
   #friend-search-bar input{
     flex:1; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
@@ -406,7 +425,8 @@
 <button id="layer-toggle" title="Alternar mapa/satélite">🛰️</button>
 <button id="add-point-btn" title="Adicionar ponto">📍</button>
 <button id="kia-btn" title="Avisar que fui eliminado">💀</button>
-<button id="kill-btn-float" title="Marquei um kill">🎯</button>
+<button id="kill-btn-float" title="Marquei um kill">🔫</button>
+<div id="joystick-base"><div id="joystick-knob"></div></div>
 <div id="big-alert"></div>
 <button id="immersive-btn" title="Esconder menus">⛶</button>
 
@@ -436,6 +456,7 @@
     <button class="tab" data-tab="comms">Comunicação<span class="unread-dot"></span></button>
     <button class="tab" data-tab="party">Party</button>
     <button class="tab" data-tab="friends">Amigos</button>
+    <button class="tab" data-tab="history">Histórico</button>
   </div>
 
   <div id="list"></div>
@@ -485,7 +506,7 @@
     <div id="score-box">
       <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px;">🎮 <span id="match-status">Nenhuma partida ativa</span></div>
       <div id="score-buttons">
-        <button id="kill-btn">🎯 +1 Kill</button>
+        <button id="kill-btn">🔫 +1 Kill</button>
         <button id="death-btn">💀 +1 Morte</button>
       </div>
       <button id="new-match-btn">Iniciar novo jogo</button>
@@ -519,6 +540,9 @@
     <div id="friend-search-result"></div>
     <div id="friends-list"></div>
     <div id="account-footer"></div>
+  </div>
+  <div id="history-panel">
+    <div id="history-list"></div>
   </div>
 </div>
 
@@ -570,6 +594,9 @@
   <div class="modal-card">
     <div class="modal-title">Seu ícone no mapa</div>
     <div id="you-icon-chips" class="chip-row"></div>
+    <input type="file" id="you-photo-input" accept="image/*" style="display:none">
+    <button id="you-photo-btn" style="width:100%; margin-top:6px; padding:10px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--you); color:var(--you); font-family:var(--sans); font-size:12.5px; font-weight:600;">📷 Usar minha foto</button>
+    <button id="you-photo-remove" style="width:100%; margin-top:6px; padding:8px; border-radius:8px; background:none; border:0.5px solid var(--border-strong); color:var(--text-secondary); font-family:var(--sans); font-size:11.5px; display:none;">Remover foto</button>
     <div class="modal-actions">
       <button id="you-icon-close" style="flex:none; width:100%">Fechar</button>
     </div>
@@ -691,19 +718,51 @@ var YOU_ICONS = [
   { id:'target', glyph:'🎯' },
   { id:'star', glyph:'⭐' },
   { id:'flag', glyph:'🚩' },
-  { id:'skull', glyph:'💀' }
+  { id:'skull', glyph:'💀' },
+  { id:'shield', glyph:'🛡️' },
+  { id:'eagle', glyph:'🦅' },
+  { id:'wolf', glyph:'🐺' },
+  { id:'fox', glyph:'🦊' },
+  { id:'snake', glyph:'🐍' },
+  { id:'fire', glyph:'🔥' },
+  { id:'bolt', glyph:'⚡' },
+  { id:'ice', glyph:'❄️' },
+  { id:'demon', glyph:'👹' },
+  { id:'robot', glyph:'🤖' },
+  { id:'ninja', glyph:'🐱‍👤' },
+  { id:'radio', glyph:'📡' }
 ];
 var youIconId = localStorage.getItem('gridsix-you-icon') || 'dot';
+var youPhotoUrl = localStorage.getItem('gridsix-you-photo') || null;
 
 function iconYou(label){
-  var chosen = YOU_ICONS.find(function(o){ return o.id === youIconId; }) || YOU_ICONS[0];
-  var bodyHtml = '<div class="pin-3d">' + (chosen.glyph || '') + '</div>';
+  var bodyHtml;
+  if(youPhotoUrl){
+    bodyHtml = '<div class="pin-3d pin-photo" style="background-image:url(\'' + youPhotoUrl + '\')"></div>';
+  } else {
+    var chosen = YOU_ICONS.find(function(o){ return o.id === youIconId; }) || YOU_ICONS[0];
+    bodyHtml = '<div class="pin-3d">' + (chosen.glyph || '') + '</div>';
+  }
   return L.divIcon({
     className:'', html:'<div style="display:flex;align-items:center"><div class="youwrap"><div class="dir"><div class="cone"></div><div class="nose"></div></div>' + bodyHtml + '</div><div class="pin-label">' + label + '</div></div>',
     iconSize:[32,32], iconAnchor:[16,16]
   });
 }
 function callsignEl(){ return document.getElementById('callsign'); }
+function iconSquad(row){
+  var bodyHtml = null;
+  if(row.avatar_photo_url){
+    bodyHtml = '<div class="pin-3d pin-photo pin-squad-3d" style="background-image:url(\'' + row.avatar_photo_url + '\')"></div>';
+  } else if(row.avatar_emoji){
+    var chosen = YOU_ICONS.find(function(o){ return o.id === row.avatar_emoji; });
+    if(chosen && chosen.glyph) bodyHtml = '<div class="pin-3d pin-squad-3d">' + chosen.glyph + '</div>';
+  }
+  if(!bodyHtml) return icon('pin-squad', row.name);
+  return L.divIcon({
+    className:'', html:'<div style="display:flex;align-items:center">' + bodyHtml + '<div class="pin-label">' + row.name + '</div></div>',
+    iconSize:[32,32], iconAnchor:[16,16]
+  });
+}
 
 var youHeading = 0;
 var youConeEl = null;
@@ -814,6 +873,10 @@ var waypointMarkers = {};
 
 // ---------- ícone do jogador ----------
 function updateYouIconBtn(){
+  if(youPhotoUrl){
+    document.getElementById('you-icon-btn').innerHTML = '<div class="pin-3d pin-photo" style="width:28px;height:28px;background-image:url(\'' + youPhotoUrl + '\')"></div>';
+    return;
+  }
   var chosen = YOU_ICONS.find(function(o){ return o.id === youIconId; }) || YOU_ICONS[0];
   document.getElementById('you-icon-btn').innerHTML = '<div class="pin-3d" style="width:28px;height:28px;font-size:13px">' + (chosen.glyph || '') + '</div>';
 }
@@ -821,18 +884,23 @@ function renderYouIconChips(){
   var wrap = document.getElementById('you-icon-chips'); wrap.innerHTML = '';
   YOU_ICONS.forEach(function(o){
     var b = document.createElement('button'); b.type = 'button';
-    b.className = 'chip-icon' + (o.id===youIconId ? ' selected' : '');
+    b.className = 'chip-icon' + (!youPhotoUrl && o.id===youIconId ? ' selected' : '');
     b.innerHTML = '<div class="pin-3d" style="width:26px;height:26px;font-size:12px">' + (o.glyph || '') + '</div>';
     b.addEventListener('click', function(){
       youIconId = o.id;
+      youPhotoUrl = null;
       localStorage.setItem('gridsix-you-icon', youIconId);
+      localStorage.removeItem('gridsix-you-photo');
       youMarker.setIcon(iconYou(callsignEl().value || 'VOCÊ'));
       refreshYouConeRef();
       updateYouIconBtn();
       renderYouIconChips();
+      document.getElementById('you-photo-remove').style.display = 'none';
+      pushMyPosition(true);
     });
     wrap.appendChild(b);
   });
+  document.getElementById('you-photo-remove').style.display = youPhotoUrl ? 'block' : 'none';
 }
 document.getElementById('you-icon-btn').addEventListener('click', function(){
   renderYouIconChips();
@@ -840,6 +908,42 @@ document.getElementById('you-icon-btn').addEventListener('click', function(){
 });
 document.getElementById('you-icon-close').addEventListener('click', function(){
   document.getElementById('you-icon-modal').style.display = 'none';
+});
+document.getElementById('you-photo-btn').addEventListener('click', function(){
+  document.getElementById('you-photo-input').click();
+});
+document.getElementById('you-photo-input').addEventListener('change', function(e){
+  var f = e.target.files && e.target.files[0];
+  this.value = '';
+  if(f) uploadYouPhoto(f);
+});
+function uploadYouPhoto(file){
+  if(!sb){ alert('Precisa estar conectado pra enviar uma foto.'); return; }
+  var btn = document.getElementById('you-photo-btn'); var original = btn.textContent;
+  btn.textContent = 'Enviando...'; btn.disabled = true;
+  var ext = (file.type.split('/')[1] || 'jpg').split('+')[0];
+  var path = 'avatars/' + myId + '-' + Date.now() + '.' + ext;
+  sb.storage.from('photos').upload(path, file, { contentType:file.type || 'image/jpeg' }).then(function(res){
+    btn.textContent = original; btn.disabled = false;
+    if(res.error){ alert('Falha ao enviar foto: ' + res.error.message); return; }
+    var pub = sb.storage.from('photos').getPublicUrl(path);
+    youPhotoUrl = pub.data.publicUrl;
+    localStorage.setItem('gridsix-you-photo', youPhotoUrl);
+    youMarker.setIcon(iconYou(callsignEl().value || 'VOCÊ'));
+    refreshYouConeRef();
+    updateYouIconBtn();
+    renderYouIconChips();
+    pushMyPosition(true);
+  });
+}
+document.getElementById('you-photo-remove').addEventListener('click', function(){
+  youPhotoUrl = null;
+  localStorage.removeItem('gridsix-you-photo');
+  youMarker.setIcon(iconYou(callsignEl().value || 'VOCÊ'));
+  refreshYouConeRef();
+  updateYouIconBtn();
+  renderYouIconChips();
+  pushMyPosition(true);
 });
 updateYouIconBtn();
 
@@ -967,6 +1071,48 @@ document.getElementById('new-match-btn').addEventListener('click', function(){
 });
 renderScore();
 
+function renderHistory(){
+  var list = document.getElementById('history-list');
+  if(!sb || !partyCode){
+    list.innerHTML = '<div class="empty">Conecte-se pra ver o histórico de partidas.</div>';
+    return;
+  }
+  list.innerHTML = '<div class="empty">Carregando...</div>';
+  sb.from('matches').select('*').eq('party_code', partyCode).order('started_at', { ascending:false }).limit(15).then(function(res){
+    var matchesList = res.data || [];
+    if(matchesList.length === 0){
+      list.innerHTML = '<div class="empty">Nenhuma partida registrada ainda nessa party.</div>';
+      return;
+    }
+    var matchIds = matchesList.map(function(m){ return m.id; });
+    sb.from('match_scores').select('*').in('match_id', matchIds).then(function(sres){
+      var byMatch = {};
+      (sres.data || []).forEach(function(s){
+        if(!byMatch[s.match_id]) byMatch[s.match_id] = [];
+        byMatch[s.match_id].push(s);
+      });
+      list.innerHTML = '';
+      matchesList.forEach(function(m){
+        var box = document.createElement('div'); box.className = 'hist-match';
+        var title = document.createElement('div'); title.className = 'hist-match-title'; title.textContent = m.name || '(sem nome)';
+        var date = document.createElement('div'); date.className = 'hist-match-date'; date.textContent = new Date(m.started_at).toLocaleString('pt-BR');
+        box.appendChild(title); box.appendChild(date);
+        var scores = (byMatch[m.id] || []).slice().sort(function(a,b){ return (b.kills - b.deaths) - (a.kills - a.deaths); });
+        if(scores.length === 0){
+          var e = document.createElement('div'); e.style.fontSize = '11px'; e.style.color = 'var(--text-muted)'; e.textContent = 'Ninguém marcou nada.';
+          box.appendChild(e);
+        }
+        scores.forEach(function(s){
+          var row = document.createElement('div'); row.className = 'lb-row' + (s.player_id === myId ? ' me' : '');
+          row.innerHTML = '<div class="lb-name">' + s.player_name + '</div><div class="lb-num">' + s.kills + ' K</div><div class="lb-num">' + s.deaths + ' D</div><div class="lb-num">' + computeKD(s.kills, s.deaths) + '</div>';
+          box.appendChild(row);
+        });
+        list.appendChild(box);
+      });
+    });
+  });
+}
+
 // ---------- modo "adicionar ponto" ----------
 var addPointBtn = document.getElementById('add-point-btn');
 addPointBtn.addEventListener('click', function(){
@@ -1022,9 +1168,46 @@ function maybeFetchGroundElevation(){
 
 // ---------- alertas: eliminado ----------
 document.getElementById('kill-btn-float').addEventListener('click', function(){
-  if(addKillOrDeath('kills', true)) showBigAlert('🎯 Kill marcado!', false);
+  if(addKillOrDeath('kills', true)) showBigAlert('🔫 Kill marcado!', false);
   else alert('Nenhuma partida ativa. Vá na aba Party e toque em "Iniciar novo jogo".');
 });
+
+// ---------- joystick pra mover o mapa ----------
+(function(){
+  var base = document.getElementById('joystick-base');
+  var knob = document.getElementById('joystick-knob');
+  var active = false, cx = 0, cy = 0, dx = 0, dy = 0, panInterval = null;
+  var maxR = 32;
+  function start(clientX, clientY){
+    var r = base.getBoundingClientRect();
+    cx = r.left + r.width/2; cy = r.top + r.height/2;
+    active = true;
+    panInterval = setInterval(function(){
+      if(dx !== 0 || dy !== 0) map.panBy([dx * 0.6, dy * 0.6], { animate:false });
+    }, 40);
+  }
+  function move(clientX, clientY){
+    if(!active) return;
+    var rdx = clientX - cx, rdy = clientY - cy;
+    var dist = Math.sqrt(rdx*rdx + rdy*rdy);
+    if(dist > maxR){ rdx = rdx / dist * maxR; rdy = rdy / dist * maxR; }
+    dx = rdx; dy = rdy;
+    knob.style.left = (27 + rdx) + 'px';
+    knob.style.top = (27 + rdy) + 'px';
+  }
+  function end(){
+    active = false; dx = 0; dy = 0;
+    clearInterval(panInterval); panInterval = null;
+    knob.style.left = '27px'; knob.style.top = '27px';
+  }
+  base.addEventListener('touchstart', function(e){ e.preventDefault(); var t = e.touches[0]; start(t.clientX, t.clientY); }, { passive:false });
+  base.addEventListener('touchmove', function(e){ e.preventDefault(); var t = e.touches[0]; move(t.clientX, t.clientY); }, { passive:false });
+  base.addEventListener('touchend', end);
+  base.addEventListener('touchcancel', end);
+  base.addEventListener('mousedown', function(e){ start(e.clientX, e.clientY); });
+  window.addEventListener('mousemove', function(e){ if(active) move(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', end);
+})();
 document.getElementById('kia-btn').addEventListener('click', function(){
   if(!confirm('Confirma que você foi eliminado? Isso avisa toda a party agora.')) return;
   addKillOrDeath('deaths', true);
@@ -1123,10 +1306,12 @@ function renderList(){
   document.getElementById('comms-panel').style.display = activeTab==='comms' ? 'flex' : 'none';
   document.getElementById('party-panel').style.display = activeTab==='party' ? 'flex' : 'none';
   document.getElementById('friends-panel').style.display = activeTab==='friends' ? 'flex' : 'none';
+  document.getElementById('history-panel').style.display = activeTab==='history' ? 'flex' : 'none';
   list.style.display = (activeTab==='squad' || activeTab==='points') ? 'block' : 'none';
   if(activeTab === 'comms'){ renderChat(); return; }
   if(activeTab === 'party'){ renderParty(); return; }
   if(activeTab === 'friends'){ renderFriends(); return; }
+  if(activeTab === 'history'){ renderHistory(); return; }
 
   list.innerHTML = '';
   if(activeTab === 'squad'){
@@ -1607,9 +1792,9 @@ function upsertSquadMember(row){
   squad[row.id] = row;
   if(squadMarkers[row.id]){
     squadMarkers[row.id].setLatLng([row.lat, row.lng]);
-    if(!prev || prev.name !== row.name) squadMarkers[row.id].setIcon(icon('pin-squad', row.name));
+    if(!prev || prev.name !== row.name || prev.avatar_emoji !== row.avatar_emoji || prev.avatar_photo_url !== row.avatar_photo_url) squadMarkers[row.id].setIcon(iconSquad(row));
   } else {
-    squadMarkers[row.id] = L.marker([row.lat, row.lng], { icon: icon('pin-squad', row.name) }).addTo(map);
+    squadMarkers[row.id] = L.marker([row.lat, row.lng], { icon: iconSquad(row) }).addTo(map);
   }
   document.getElementById('status-text').textContent = (Object.keys(squad).length) + ' na malha';
   if(trackTarget && trackTarget.group==='squad' && trackTarget.id===row.id) updateTrack();
@@ -1758,7 +1943,9 @@ function pushMyPosition(force){
   lastPush = now;
   sb.from('players').upsert({
     id:myId, party_code:partyCode, name: callsignEl().value || 'VOCÊ',
-    lat:you.lat, lng:you.lng, heading:youHeading, altitude:you.alt, agl:you.agl, updated_at:new Date().toISOString()
+    lat:you.lat, lng:you.lng, heading:youHeading, altitude:you.alt, agl:you.agl,
+    avatar_emoji: youPhotoUrl ? null : youIconId, avatar_photo_url: youPhotoUrl,
+    updated_at:new Date().toISOString()
   }).then(function(res){
     setSyncStatus(!res.error, res.error ? 'sem conexão' : (Object.keys(squad).length) + ' na malha');
   });
@@ -2059,6 +2246,15 @@ function respondRequest(reqId, accept){
   if(accept) sb.from('friends').update({ status:'accepted' }).eq('id', reqId).then(loadFriends);
   else sb.from('friends').delete().eq('id', reqId).then(loadFriends);
 }
+function deleteFriend(otherId){
+  if(!confirm('Remover esse amigo da sua lista?')) return;
+  sb.from('friends').delete()
+    .or('and(user_id.eq.' + session.user.id + ',friend_id.eq.' + otherId + '),and(user_id.eq.' + otherId + ',friend_id.eq.' + session.user.id + ')')
+    .then(function(res){
+      if(res.error){ alert('Falha ao remover: ' + res.error.message); return; }
+      loadFriends();
+    });
+}
 function renderFriends(){
   var list = document.getElementById('friends-list');
   list.innerHTML = '';
@@ -2109,6 +2305,10 @@ function renderFriends(){
     inv.textContent = 'Convidar';
     inv.addEventListener('click', function(){ inviteFriend(fid); });
     row.appendChild(inv);
+    var del = document.createElement('button'); del.className = 'row-del'; del.style.marginLeft = '6px'; del.textContent = '✕';
+    del.title = 'Remover amigo';
+    del.addEventListener('click', function(){ deleteFriend(fid); });
+    row.appendChild(del);
     list.appendChild(row);
   });
 
