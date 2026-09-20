@@ -472,6 +472,9 @@
   </div>
 
   <div id="friends-panel">
+    <div id="push-row" style="padding:0 14px 8px; flex-shrink:0;">
+      <button id="push-btn" style="width:100%; padding:10px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--you); color:var(--you); font-family:var(--sans); font-size:12.5px; font-weight:600;">🔔 Ativar notificações (mesmo com app fechado)</button>
+    </div>
     <div id="friend-search-bar">
       <input id="friend-search" placeholder="Buscar por nome de operador">
       <button id="friend-search-btn">Buscar</button>
@@ -1966,22 +1969,96 @@ function renderFriends(){
     }
     list.appendChild(row);
   });
+
+  var otherIds = Object.keys(onlinePresence).filter(function(uid){ return uid !== session.user.id && !friends[uid]; });
+  var oh = document.createElement('div'); oh.className = 'modal-label'; oh.textContent = 'Jogadores online agora';
+  list.appendChild(oh);
+  if(otherIds.length === 0){
+    var e2 = document.createElement('div'); e2.className = 'empty'; e2.textContent = 'Ninguém mais com o app aberto agora.';
+    list.appendChild(e2);
+  }
+  otherIds.forEach(function(uid){
+    var p = onlinePresence[uid];
+    var row2 = document.createElement('div'); row2.className = 'row'; row2.style.cursor = 'default';
+    var sw2 = document.createElement('div'); sw2.className = 'swatch'; sw2.style.background = 'var(--ok)';
+    var main2 = document.createElement('div'); main2.className = 'row-main';
+    main2.innerHTML = '<div class="row-name">' + p.callsign + '</div><div class="row-coord">Online agora</div>';
+    row2.appendChild(sw2); row2.appendChild(main2);
+    var inv2 = document.createElement('button'); inv2.className = 'row-del'; inv2.style.width = 'auto'; inv2.style.padding = '0 10px'; inv2.style.color = 'var(--you)';
+    inv2.textContent = 'Convidar';
+    inv2.addEventListener('click', function(){ inviteFriend(uid); });
+    row2.appendChild(inv2);
+    list.appendChild(row2);
+  });
 }
 
 // ---------- presença online ----------
+var onlinePresence = {};
 function joinPresence(){
   if(!sb || !session) return;
   presenceChannel = sb.channel('online-users', { config:{ presence:{ key:session.user.id } } });
   presenceChannel.on('presence', { event:'sync' }, function(){
     var state = presenceChannel.presenceState();
-    onlineFriends = {};
-    Object.keys(state).forEach(function(uid){ onlineFriends[uid] = true; });
+    onlineFriends = {}; onlinePresence = {};
+    Object.keys(state).forEach(function(uid){
+      var meta = (state[uid] && state[uid][0]) || {};
+      onlinePresence[uid] = { callsign: meta.callsign || '...' };
+      onlineFriends[uid] = true;
+    });
     if(activeTab === 'friends') renderFriends();
   }).subscribe(function(status){
     if(status === 'SUBSCRIBED') presenceChannel.track({ callsign: myProfile.callsign, online_at:new Date().toISOString() });
   });
 }
 
+// ---------- notificações push ----------
+var VAPID_PUBLIC_KEY = 'BIIcjKh3ehFPfIpQqdlNMfffqrFEi-Q17UAgkXXz8zQUvetTraYplfb6Zf7QoJRSqBouKLFpZZ_TwCWpUrwJDJA';
+function urlBase64ToUint8Array(base64String){
+  var padding = '='.repeat((4 - base64String.length % 4) % 4);
+  var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  var rawData = atob(base64);
+  var outputArray = new Uint8Array(rawData.length);
+  for(var i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+function updatePushBtn(state){
+  var btn = document.getElementById('push-btn');
+  if(!btn) return;
+  if(state === 'on'){ btn.textContent = '🔔 Notificações ativadas'; btn.disabled = true; btn.style.opacity = '.7'; }
+  else if(state === 'unsupported'){ btn.textContent = '🔔 Notificações não suportadas nesse navegador'; btn.disabled = true; btn.style.opacity = '.5'; }
+  else if(state === 'denied'){ btn.textContent = '🔔 Permissão negada (ajuste nas Config. do iPhone)'; btn.disabled = true; btn.style.opacity = '.5'; }
+}
+function enablePush(){
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){ updatePushBtn('unsupported'); return; }
+  if(!session){ alert('Entre com uma conta primeiro pra ativar notificações.'); return; }
+  navigator.serviceWorker.register('./sw.js').then(function(reg){
+    return Notification.requestPermission().then(function(perm){
+      if(perm !== 'granted'){ updatePushBtn('denied'); return; }
+      return reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      }).then(function(sub){
+        var json = sub.toJSON();
+        sb.from('push_subscriptions').upsert({
+          user_id: session.user.id, endpoint: json.endpoint,
+          p256dh: json.keys.p256dh, auth: json.keys.auth
+        }, { onConflict: 'endpoint' }).then(function(res){
+          if(!res.error) updatePushBtn('on');
+        });
+      });
+    });
+  }).catch(function(err){
+    alert('Não consegui ativar notificações: ' + err.message);
+  });
+}
+document.getElementById('push-btn').addEventListener('click', enablePush);
+if('serviceWorker' in navigator && 'PushManager' in window){
+  navigator.serviceWorker.getRegistration('./sw.js').then(function(reg){
+    if(reg) reg.pushManager.getSubscription().then(function(sub){ if(sub) updatePushBtn('on'); });
+  }).catch(function(){});
+} else {
+  updatePushBtn('unsupported');
+}
 // ---------- convites de party ----------
 function inviteFriend(friendId){
   sb.from('party_invites').insert({ from_user:session.user.id, to_user:friendId, party_code:partyCode, status:'pending' }).then(function(res){
