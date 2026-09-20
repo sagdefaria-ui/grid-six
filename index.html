@@ -1927,7 +1927,15 @@ function renderFriends(){
   var list = document.getElementById('friends-list');
   list.innerHTML = '';
   if(!session){
-    list.innerHTML = '<div class="empty">Crie uma conta ou entre pra ter uma lista de amigos fixa e convidar quem estiver online.</div>';
+    list.innerHTML = '';
+    var g = document.createElement('div'); g.className = 'empty';
+    g.textContent = 'Crie uma conta ou entre pra ter uma lista de amigos fixa, convidar quem estiver online e ativar notificações.';
+    list.appendChild(g);
+    var loginBtn = document.createElement('button');
+    loginBtn.textContent = 'Entrar / Criar conta';
+    loginBtn.style.cssText = 'display:block; margin:10px auto 0; background:var(--you); color:#062033; border:none; border-radius:8px; padding:10px 18px; font-family:var(--sans); font-size:13px; font-weight:600;';
+    loginBtn.addEventListener('click', function(){ showAuthGate(); });
+    list.appendChild(loginBtn);
     return;
   }
   var reqIds = Object.keys(incomingRequests);
