@@ -221,6 +221,19 @@
     left:27px; top:27px; pointer-events:none;
   }
   body.landscape #joystick-base{ bottom:16px; left:14px; }
+  #call-widget{
+    display:none; position:absolute; z-index:900; width:240px; height:190px;
+    top:calc(env(safe-area-inset-top,0px) + 60px); right:10px;
+    background:var(--panel); border:1px solid var(--you); border-radius:10px; overflow:hidden;
+    box-shadow:0 6px 18px rgba(0,0,0,.5); flex-direction:column;
+  }
+  #call-widget.on{ display:flex; }
+  #call-widget-bar{
+    display:flex; align-items:center; justify-content:space-between; padding:6px 10px;
+    background:var(--panel-2); font-size:11.5px; color:var(--you); flex-shrink:0;
+  }
+  #call-widget-close{ background:none; border:none; color:var(--danger); font-size:14px; padding:2px 6px; }
+  #call-widget-frame{ flex:1; }
   #big-alert{
     position:absolute; top:50%; left:12px; right:12px; transform:translateY(-50%); z-index:900;
     background:rgba(20,10,8,.95); border:1.5px solid var(--danger); border-radius:14px;
@@ -432,6 +445,13 @@
 <button id="kia-btn" title="Avisar que fui eliminado">💀</button>
 <button id="kill-btn-float" title="Marquei um kill">🔫</button>
 <div id="joystick-base"><div id="joystick-knob"></div></div>
+<div id="call-widget">
+  <div id="call-widget-bar">
+    <span id="call-widget-label">🎙️ Chamada de voz</span>
+    <button id="call-widget-close" title="Encerrar chamada">✕</button>
+  </div>
+  <iframe id="call-widget-frame" allow="microphone; autoplay" style="width:100%; height:100%; border:0;"></iframe>
+</div>
 <div id="big-alert"></div>
 <button id="immersive-btn" title="Esconder menus">⛶</button>
 
@@ -1677,10 +1697,20 @@ function dmRoomName(otherId){
 }
 function joinCall(roomName, voiceOnly){
   var name = encodeURIComponent(callsignEl().value || 'VOCÊ');
-  var extra = voiceOnly ? '&config.startAudioOnly=true&config.startWithVideoMuted=true' : '&config.startWithVideoMuted=true';
-  var url = 'https://meet.jit.si/' + roomName + '#config.prejoinPageEnabled=false&userInfo.displayName=%22' + name + '%22' + extra;
-  window.open(url, '_blank');
+  if(voiceOnly){
+    var url = 'https://meet.jit.si/' + roomName + '#config.startAudioOnly=true&userInfo.displayName=%22' + name + '%22';
+    document.getElementById('call-widget-frame').src = url;
+    document.getElementById('call-widget').classList.add('on');
+  } else {
+    var url2 = 'https://meet.jit.si/' + roomName + '#config.startWithVideoMuted=true&userInfo.displayName=%22' + name + '%22';
+    window.open(url2, '_blank');
+  }
 }
+function closeCallWidget(){
+  document.getElementById('call-widget-frame').src = 'about:blank';
+  document.getElementById('call-widget').classList.remove('on');
+}
+document.getElementById('call-widget-close').addEventListener('click', closeCallWidget);
 function joinPartyCall(voiceOnly){ joinCall(jitsiRoomName(), voiceOnly); }
 function startIndividualCall(peerId, peerName, voiceOnly){
   if(callSignalChannel) callSignalChannel.send({ type:'broadcast', event:'ring', payload:{ to:peerId, from:myId, fromName:callsignEl().value || 'VOCÊ', voiceOnly:!!voiceOnly } });
@@ -2004,6 +2034,7 @@ function subscribeParty(){
 }
 
 function switchParty(code){
+  closeCallWidget();
   teardownCallSignal();
   partyCode = code;
   localStorage.setItem('gridsix-party-code', partyCode);
