@@ -573,14 +573,7 @@
   </div>
 </div>
 
-<div id="call-overlay" class="modal-overlay" style="z-index:950; padding:0;">
-  <div style="width:100%; height:100%; position:relative; display:flex; flex-direction:column;">
-    <div id="jitsi-container" style="flex:1; width:100%; background:#000;"></div>
-    <div style="padding:10px; padding-bottom:calc(env(safe-area-inset-bottom,0px) + 10px); display:flex; gap:16px; justify-content:center; background:var(--panel);">
-      <button id="call-end-btn" style="background:var(--danger); color:#fff; border:none; border-radius:50%; width:50px; height:50px; font-size:20px;">📵</button>
-    </div>
-  </div>
-</div>
+
 
 <div id="wp-modal" class="modal-overlay">
   <div class="modal-card">
@@ -627,7 +620,6 @@
 <input type="file" id="intel-input" accept="application/pdf,image/*" style="display:none">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.js"></script>
-<script src="https://meet.jit.si/external_api.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){
@@ -1664,8 +1656,7 @@ pttBtn.addEventListener('pointerup', stopRecording);
 pttBtn.addEventListener('pointercancel', stopRecording);
 pttBtn.addEventListener('pointerleave', function(){ if(recording) stopRecording(); });
 
-// ---------- chamadas via Jitsi Meet (grupo da party + individual) ----------
-var jitsiApi = null;
+// ---------- chamadas via Jitsi Meet (grupo da party + individual, em aba externa) ----------
 var callSignalChannel = null;
 function jitsiRoomName(){
   // nome ofuscado pra não ser óbvio de adivinhar por quem não tem o código da party
@@ -1678,29 +1669,15 @@ function dmRoomName(otherId){
   return 'gridsix-dm-' + combo;
 }
 function joinCall(roomName){
-  if(jitsiApi) return;
-  if(typeof JitsiMeetExternalAPI === 'undefined'){ alert('Não consegui carregar o serviço de chamada. Verifique sua internet e tente de novo.'); return; }
-  document.getElementById('call-overlay').style.display = 'flex';
-  jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
-    roomName: roomName,
-    parentNode: document.getElementById('jitsi-container'),
-    width: '100%', height: '100%',
-    userInfo: { displayName: callsignEl().value || 'VOCÊ' },
-    configOverwrite: { prejoinPageEnabled:false, disableDeepLinking:true, startWithVideoMuted:true },
-    interfaceConfigOverwrite: { MOBILE_APP_PROMO:false }
-  });
-  jitsiApi.addEventListener('videoConferenceLeft', function(){ leavePartyCall(); });
+  var name = encodeURIComponent(callsignEl().value || 'VOCÊ');
+  var url = 'https://meet.jit.si/' + roomName + '#config.prejoinPageEnabled=false&userInfo.displayName=%22' + name + '%22';
+  window.open(url, '_blank');
 }
 function joinPartyCall(){ joinCall(jitsiRoomName()); }
 function startIndividualCall(peerId, peerName){
   if(callSignalChannel) callSignalChannel.send({ type:'broadcast', event:'ring', payload:{ to:peerId, from:myId, fromName:callsignEl().value || 'VOCÊ' } });
   joinCall(dmRoomName(peerId));
 }
-function leavePartyCall(){
-  if(jitsiApi){ try{ jitsiApi.dispose(); }catch(e){} jitsiApi = null; }
-  document.getElementById('call-overlay').style.display = 'none';
-}
-document.getElementById('call-end-btn').addEventListener('click', function(){ leavePartyCall(); });
 document.getElementById('party-call-btn').addEventListener('click', function(){ joinPartyCall(); });
 function setupCallSignal(){
   if(!sb) return;
@@ -1708,7 +1685,7 @@ function setupCallSignal(){
   callSignalChannel = sb.channel('callsignal-' + partyCode, { config:{ broadcast:{ self:false } } });
   callSignalChannel.on('broadcast', { event:'ring' }, function(msg){
     var p = msg.payload;
-    if(!p || p.to !== myId || jitsiApi) return;
+    if(!p || p.to !== myId) return;
     if(confirm((p.fromName || 'Alguém') + ' está te chamando. Atender?')) joinCall(dmRoomName(p.from));
   }).subscribe();
 }
@@ -2018,7 +1995,6 @@ function subscribeParty(){
 }
 
 function switchParty(code){
-  leavePartyCall();
   teardownCallSignal();
   partyCode = code;
   localStorage.setItem('gridsix-party-code', partyCode);
