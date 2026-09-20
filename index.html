@@ -508,6 +508,7 @@
         <button id="timer-reset" title="Zerar">↺</button>
       </div>
     </div>
+    <button id="party-call-btn" style="width:calc(100% - 28px); margin:0 14px 10px; padding:11px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--you); color:var(--you); font-family:var(--sans); font-size:13px; font-weight:600; flex-shrink:0;">📞🎥 Chamada em grupo da party</button>
     <div id="score-box">
       <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px;">🎮 <span id="match-status">Nenhuma partida ativa</span></div>
       <div id="score-buttons">
@@ -574,11 +575,9 @@
 
 <div id="call-overlay" class="modal-overlay" style="z-index:950; padding:0;">
   <div style="width:100%; height:100%; position:relative; display:flex; flex-direction:column;">
-    <video id="call-remote-video" autoplay playsinline style="flex:1; width:100%; background:#000; object-fit:cover;"></video>
-    <video id="call-local-video" autoplay playsinline muted style="position:absolute; width:100px; height:140px; right:14px; top:calc(env(safe-area-inset-top,0px) + 14px); border-radius:10px; object-fit:cover; border:2px solid var(--you); background:#000;"></video>
-    <div id="call-status" style="position:absolute; top:calc(env(safe-area-inset-top,0px) + 14px); left:14px; background:rgba(0,0,0,.6); padding:6px 12px; border-radius:8px; font-size:13px;"></div>
-    <div style="padding:16px; padding-bottom:calc(env(safe-area-inset-bottom,0px) + 16px); display:flex; gap:16px; justify-content:center; background:var(--panel);">
-      <button id="call-end-btn" style="background:var(--danger); color:#fff; border:none; border-radius:50%; width:58px; height:58px; font-size:24px;">📵</button>
+    <div id="jitsi-container" style="flex:1; width:100%; background:#000;"></div>
+    <div style="padding:10px; padding-bottom:calc(env(safe-area-inset-bottom,0px) + 10px); display:flex; gap:16px; justify-content:center; background:var(--panel);">
+      <button id="call-end-btn" style="background:var(--danger); color:#fff; border:none; border-radius:50%; width:50px; height:50px; font-size:20px;">📵</button>
     </div>
   </div>
 </div>
@@ -628,6 +627,7 @@
 <input type="file" id="intel-input" accept="application/pdf,image/*" style="display:none">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.js"></script>
+<script src="https://meet.jit.si/external_api.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){
@@ -1428,13 +1428,9 @@ function rowEl(name, coord, distStr, brngStr, lat, lng, id, group, deletable, co
   row.appendChild(trackBtn);
   if(group === 'squad'){
     var callBtn = document.createElement('button'); callBtn.className='row-del'; callBtn.style.marginLeft='6px'; callBtn.textContent='📞';
-    callBtn.title = 'Ligar (áudio)';
-    callBtn.addEventListener('click', function(ev){ ev.stopPropagation(); startCall(id, name, false); });
+    callBtn.title = 'Chamada individual (voz e vídeo)';
+    callBtn.addEventListener('click', function(ev){ ev.stopPropagation(); startIndividualCall(id, name); });
     row.appendChild(callBtn);
-    var vidBtn = document.createElement('button'); vidBtn.className='row-del'; vidBtn.style.marginLeft='6px'; vidBtn.textContent='🎥';
-    vidBtn.title = 'Ligar (vídeo)';
-    vidBtn.addEventListener('click', function(ev){ ev.stopPropagation(); startCall(id, name, true); });
-    row.appendChild(vidBtn);
   }
   if(deletable){
     var eye = document.createElement('button'); eye.className='row-del'; eye.textContent = hidden ? '🚫' : '👁';
@@ -1668,86 +1664,55 @@ pttBtn.addEventListener('pointerup', stopRecording);
 pttBtn.addEventListener('pointercancel', stopRecording);
 pttBtn.addEventListener('pointerleave', function(){ if(recording) stopRecording(); });
 
-// ---------- WebRTC: sinalização ----------
-var ICE_SERVERS = { iceServers:[
-  { urls:'stun:stun.l.google.com:19302' },
-  { urls:'stun:stun1.l.google.com:19302' }
-]};
-var rtcChannel = null;
-function sendSignal(msg){ if(rtcChannel) rtcChannel.send({ type:'broadcast', event:'signal', payload:msg }); }
-function setupRTC(){
+// ---------- chamadas via Jitsi Meet (grupo da party + individual) ----------
+var jitsiApi = null;
+var callSignalChannel = null;
+function jitsiRoomName(){
+  // nome ofuscado pra não ser óbvio de adivinhar por quem não tem o código da party
+  var salt = 'gx7f';
+  return 'gridsix-' + salt + '-' + partyCode.replace(/[^a-zA-Z0-9]/g, '');
+}
+function dmRoomName(otherId){
+  var ids = [myId, otherId].sort();
+  var combo = (ids[0] + ids[1]).replace(/[^a-zA-Z0-9]/g, '').slice(0, 28);
+  return 'gridsix-dm-' + combo;
+}
+function joinCall(roomName){
+  if(jitsiApi) return;
+  if(typeof JitsiMeetExternalAPI === 'undefined'){ alert('Não consegui carregar o serviço de chamada. Verifique sua internet e tente de novo.'); return; }
+  document.getElementById('call-overlay').style.display = 'flex';
+  jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
+    roomName: roomName,
+    parentNode: document.getElementById('jitsi-container'),
+    width: '100%', height: '100%',
+    userInfo: { displayName: callsignEl().value || 'VOCÊ' },
+    configOverwrite: { prejoinPageEnabled:false, disableDeepLinking:true, startWithVideoMuted:true },
+    interfaceConfigOverwrite: { MOBILE_APP_PROMO:false }
+  });
+  jitsiApi.addEventListener('videoConferenceLeft', function(){ leavePartyCall(); });
+}
+function joinPartyCall(){ joinCall(jitsiRoomName()); }
+function startIndividualCall(peerId, peerName){
+  if(callSignalChannel) callSignalChannel.send({ type:'broadcast', event:'ring', payload:{ to:peerId, from:myId, fromName:callsignEl().value || 'VOCÊ' } });
+  joinCall(dmRoomName(peerId));
+}
+function leavePartyCall(){
+  if(jitsiApi){ try{ jitsiApi.dispose(); }catch(e){} jitsiApi = null; }
+  document.getElementById('call-overlay').style.display = 'none';
+}
+document.getElementById('call-end-btn').addEventListener('click', function(){ leavePartyCall(); });
+document.getElementById('party-call-btn').addEventListener('click', function(){ joinPartyCall(); });
+function setupCallSignal(){
   if(!sb) return;
-  if(rtcChannel) sb.removeChannel(rtcChannel);
-  rtcChannel = sb.channel('rtc-' + partyCode, { config:{ broadcast:{ self:false } } });
-  rtcChannel.on('broadcast', { event:'signal' }, function(msg){ handleSignal(msg.payload); }).subscribe();
+  if(callSignalChannel) sb.removeChannel(callSignalChannel);
+  callSignalChannel = sb.channel('callsignal-' + partyCode, { config:{ broadcast:{ self:false } } });
+  callSignalChannel.on('broadcast', { event:'ring' }, function(msg){
+    var p = msg.payload;
+    if(!p || p.to !== myId || jitsiApi) return;
+    if(confirm((p.fromName || 'Alguém') + ' está te chamando. Atender?')) joinCall(dmRoomName(p.from));
+  }).subscribe();
 }
-function teardownRTC(){
-  endCall(true);
-  if(rtcChannel){ sb.removeChannel(rtcChannel); rtcChannel = null; }
-}
-
-// ---------- chamada 1-a-1 (áudio/vídeo) ----------
-var callPC = null, localCallStream = null, callState = null;
-function showCallUI(){ document.getElementById('call-overlay').style.display = 'flex'; }
-function hideCallUI(){ document.getElementById('call-overlay').style.display = 'none'; document.getElementById('call-status').textContent = ''; }
-function startCall(peerId, peerName, withVideo){
-  if(callState) return;
-  navigator.mediaDevices.getUserMedia({ audio:true, video:!!withVideo }).then(function(stream){
-    localCallStream = stream;
-    document.getElementById('call-local-video').srcObject = stream;
-    document.getElementById('call-local-video').style.display = withVideo ? 'block' : 'none';
-    callPC = new RTCPeerConnection(ICE_SERVERS);
-    stream.getTracks().forEach(function(t){ callPC.addTrack(t, stream); });
-    callPC.onicecandidate = function(e){ if(e.candidate) sendSignal({ to:peerId, from:myId, type:'ice-call', candidate:e.candidate }); };
-    callPC.ontrack = function(e){ document.getElementById('call-remote-video').srcObject = e.streams[0]; };
-    callState = { peerId:peerId, peerName:peerName };
-    document.getElementById('call-status').textContent = 'Chamando ' + peerName + '...';
-    showCallUI();
-    callPC.createOffer().then(function(o){ return callPC.setLocalDescription(o); }).then(function(){
-      sendSignal({ to:peerId, from:myId, type:'call-offer', sdp:callPC.localDescription, name:callsignEl().value || 'VOCÊ', video:!!withVideo });
-    });
-  }).catch(function(){ alert('Não consegui acessar câmera/microfone.'); });
-}
-function endCall(remoteEnded){
-  if(callPC){ callPC.close(); callPC = null; }
-  if(localCallStream){ localCallStream.getTracks().forEach(function(t){ t.stop(); }); localCallStream = null; }
-  if(!remoteEnded && callState) sendSignal({ to:callState.peerId, from:myId, type:'call-end' });
-  callState = null;
-  hideCallUI();
-}
-document.getElementById('call-end-btn').addEventListener('click', function(){ endCall(false); });
-
-function handleSignal(msg){
-  if(!msg || (msg.to !== myId && msg.to !== 'all')) return;
-  if(msg.type === 'call-offer'){
-    if(callState){ sendSignal({ to:msg.from, from:myId, type:'call-decline' }); return; }
-    if(confirm((msg.name || 'Alguém') + ' está te chamando' + (msg.video ? ' (vídeo)' : ' (áudio)') + '. Atender?')){
-      navigator.mediaDevices.getUserMedia({ audio:true, video:!!msg.video }).then(function(stream){
-        localCallStream = stream;
-        document.getElementById('call-local-video').srcObject = stream;
-        document.getElementById('call-local-video').style.display = msg.video ? 'block' : 'none';
-        callPC = new RTCPeerConnection(ICE_SERVERS);
-        stream.getTracks().forEach(function(t){ callPC.addTrack(t, stream); });
-        callPC.onicecandidate = function(e){ if(e.candidate) sendSignal({ to:msg.from, from:myId, type:'ice-call', candidate:e.candidate }); };
-        callPC.ontrack = function(e){ document.getElementById('call-remote-video').srcObject = e.streams[0]; };
-        callState = { peerId:msg.from, peerName:msg.name };
-        document.getElementById('call-status').textContent = 'Em chamada com ' + msg.name;
-        showCallUI();
-        callPC.setRemoteDescription(new RTCSessionDescription(msg.sdp)).then(function(){ return callPC.createAnswer(); })
-          .then(function(a){ return callPC.setLocalDescription(a); })
-          .then(function(){ sendSignal({ to:msg.from, from:myId, type:'call-answer', sdp:callPC.localDescription }); });
-      }).catch(function(){ sendSignal({ to:msg.from, from:myId, type:'call-decline' }); });
-    } else {
-      sendSignal({ to:msg.from, from:myId, type:'call-decline' });
-    }
-  }
-  else if(msg.type === 'call-answer'){
-    if(callPC){ callPC.setRemoteDescription(new RTCSessionDescription(msg.sdp)); document.getElementById('call-status').textContent = 'Em chamada com ' + (callState ? callState.peerName : ''); }
-  }
-  else if(msg.type === 'ice-call'){ if(callPC && msg.candidate) callPC.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(function(){}); }
-  else if(msg.type === 'call-decline'){ alert('Chamada recusada.'); endCall(true); }
-  else if(msg.type === 'call-end'){ endCall(true); }
-}
+function teardownCallSignal(){ if(callSignalChannel){ sb.removeChannel(callSignalChannel); callSignalChannel = null; } }
 
 // ---------- party ----------
 function renderParty(){
@@ -2020,7 +1985,7 @@ function subscribeParty(){
   if(playersChannel) sb.removeChannel(playersChannel);
   if(waypointsChannel) sb.removeChannel(waypointsChannel);
   if(messagesChannel) sb.removeChannel(messagesChannel);
-  setupRTC();
+  setupCallSignal();
 
   playersChannel = sb.channel('players-' + partyCode)
     .on('postgres_changes', { event:'*', schema:'public', table:'players', filter:'party_code=eq.' + partyCode }, function(payload){
@@ -2053,7 +2018,8 @@ function subscribeParty(){
 }
 
 function switchParty(code){
-  teardownRTC();
+  leavePartyCall();
+  teardownCallSignal();
   partyCode = code;
   localStorage.setItem('gridsix-party-code', partyCode);
   document.getElementById('party-code-val').textContent = partyCode;
