@@ -222,13 +222,14 @@
   }
   body.landscape #joystick-base{ bottom:16px; left:14px; }
   #call-widget{
-    display:none; position:absolute; z-index:900; width:240px; height:190px;
+    display:none; position:absolute; z-index:900; width:280px; height:420px;
     top:calc(env(safe-area-inset-top,0px) + 60px); right:10px;
     background:var(--panel); border:1px solid var(--you); border-radius:10px; overflow:hidden;
     box-shadow:0 6px 18px rgba(0,0,0,.5); flex-direction:column;
+    max-height:calc(100vh - env(safe-area-inset-top,0px) - 80px);
   }
   #call-widget.on{ display:flex; }
-  #call-widget.big{ width:300px; height:260px; }
+  #call-widget.big{ width:320px; height:460px; }
   #call-widget.minimized{ width:150px; height:38px; }
   #call-widget.minimized #call-widget-frame{ height:1px; min-height:1px; opacity:0; pointer-events:none; flex:none; }
   #call-widget-bar{
