@@ -228,6 +228,7 @@
     box-shadow:0 6px 18px rgba(0,0,0,.5); flex-direction:column;
   }
   #call-widget.on{ display:flex; }
+  #call-widget.big{ width:300px; height:260px; }
   #call-widget-bar{
     display:flex; align-items:center; justify-content:space-between; padding:6px 10px;
     background:var(--panel-2); font-size:11.5px; color:var(--you); flex-shrink:0;
@@ -450,7 +451,7 @@
     <span id="call-widget-label">🎙️ Chamada de voz</span>
     <button id="call-widget-close" title="Encerrar chamada">✕</button>
   </div>
-  <iframe id="call-widget-frame" allow="microphone; autoplay" style="width:100%; height:100%; border:0;"></iframe>
+  <iframe id="call-widget-frame" allow="camera; microphone; autoplay" style="width:100%; height:100%; border:0;"></iframe>
 </div>
 <div id="big-alert"></div>
 <button id="immersive-btn" title="Esconder menus">⛶</button>
@@ -529,8 +530,8 @@
       </div>
     </div>
     <div style="display:flex; gap:8px; margin:0 14px 10px; flex-shrink:0;">
-      <button id="party-call-voice-btn" style="flex:1; padding:11px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--you); color:var(--you); font-family:var(--sans); font-size:12.5px; font-weight:600;">🎙️ Voz (não trava o app)</button>
-      <button id="party-call-video-btn" style="flex:1; padding:11px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--you); color:var(--you); font-family:var(--sans); font-size:12.5px; font-weight:600;">🎥 Vídeo (abre aba)</button>
+      <button id="party-call-voice-btn" style="flex:1; padding:11px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--you); color:var(--you); font-family:var(--sans); font-size:12.5px; font-weight:600;">🎙️ Chamada de voz</button>
+      <button id="party-call-video-btn" style="flex:1; padding:11px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--you); color:var(--you); font-family:var(--sans); font-size:12.5px; font-weight:600;">🎥 Chamada de vídeo</button>
     </div>
     <div id="score-box">
       <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px;">🎮 <span id="match-status">Nenhuma partida ativa</span></div>
@@ -1697,14 +1698,12 @@ function dmRoomName(otherId){
 }
 function joinCall(roomName, voiceOnly){
   var name = encodeURIComponent(callsignEl().value || 'VOCÊ');
-  if(voiceOnly){
-    var url = 'https://meet.jit.si/' + roomName + '#config.startAudioOnly=true&userInfo.displayName=%22' + name + '%22';
-    document.getElementById('call-widget-frame').src = url;
-    document.getElementById('call-widget').classList.add('on');
-  } else {
-    var url2 = 'https://meet.jit.si/' + roomName + '#config.startWithVideoMuted=true&userInfo.displayName=%22' + name + '%22';
-    window.open(url2, '_blank');
-  }
+  var extra = voiceOnly ? '&config.startAudioOnly=true' : '';
+  var url = 'https://meet.jit.si/' + roomName + '#userInfo.displayName=%22' + name + '%22' + extra;
+  document.getElementById('call-widget-frame').src = url;
+  document.getElementById('call-widget').classList.add('on');
+  document.getElementById('call-widget').classList.toggle('big', !voiceOnly);
+  document.getElementById('call-widget-label').textContent = voiceOnly ? '🎙️ Chamada de voz' : '🎥 Chamada de vídeo';
 }
 function closeCallWidget(){
   document.getElementById('call-widget-frame').src = 'about:blank';
