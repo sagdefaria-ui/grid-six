@@ -437,11 +437,6 @@
   <button id="fmt-toggle">GPS</button>
 </div>
 
-<div id="banner">
-  <span><b>Conectado ao backend</b> — posição, pontos, chat de texto e áudio do PTT sincronizam entre celulares na mesma party.</span>
-  <button onclick="document.getElementById('banner').style.display='none'">✕</button>
-</div>
-
 <div id="maphint">Toque no mapa para posicionar o ponto</div>
 <div id="track-chip"></div>
 <button id="locate-btn" title="Me localizar">🎯</button>
@@ -2206,6 +2201,9 @@ setInterval(function(){
     if(now - t > 40000) removeSquadMember(id);
   });
 }, 10000);
+
+// rede de segurança: mantém a aba Party sempre fiel ao estado real do esquadrão
+setInterval(function(){ if(activeTab === 'party') renderParty(); }, 4000);
 
 function startPartySync(){
   if(sb){
