@@ -497,6 +497,10 @@
   </div>
 
   <div id="comms-panel">
+    <div style="display:flex; gap:8px; padding:10px 14px 0; flex-shrink:0;">
+      <button id="party-call-voice-btn" style="flex:1; padding:10px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--you); color:var(--you); font-family:var(--sans); font-size:12.5px; font-weight:600;">🎙️ Chamada de voz</button>
+      <button id="party-call-video-btn" style="flex:1; padding:10px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--you); color:var(--you); font-family:var(--sans); font-size:12.5px; font-weight:600;">🎥 Chamada de vídeo</button>
+    </div>
     <div id="chat-log"></div>
     <div id="chat-bar">
       <button id="photo-btn" title="Enviar foto">📷</button>
@@ -534,10 +538,6 @@
         <button id="timer-reset" title="Zerar">↺</button>
       </div>
     </div>
-    <div style="display:flex; gap:8px; margin:0 14px 10px; flex-shrink:0;">
-      <button id="party-call-voice-btn" style="flex:1; padding:11px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--you); color:var(--you); font-family:var(--sans); font-size:12.5px; font-weight:600;">🎙️ Chamada de voz</button>
-      <button id="party-call-video-btn" style="flex:1; padding:11px; border-radius:8px; background:var(--panel-2); border:0.5px solid var(--you); color:var(--you); font-family:var(--sans); font-size:12.5px; font-weight:600;">🎥 Chamada de vídeo</button>
-    </div>
     <div id="score-box">
       <div style="font-size:11px; color:var(--text-muted); margin-bottom:6px;">🎮 <span id="match-status">Nenhuma partida ativa</span></div>
       <div id="score-buttons">
@@ -553,6 +553,7 @@
     </div>
 
     <div id="party-list"></div>
+    <div id="party-online-friends"></div>
     <div id="invite-bar" style="flex-direction:column">
       <input id="join-name-input" placeholder="Seu nome (ex: Falcão)">
       <button id="save-name-btn" style="width:100%">Salvar nome</button>
@@ -1546,17 +1547,24 @@ function renderChat(){
   var log = document.getElementById('chat-log');
   log.innerHTML = '';
   messages.forEach(function(m){
-    var special = m.kind === 'kia' || m.kind === 'alert';
+    var special = m.kind === 'kia' || m.kind === 'alert' || m.kind === 'call-voice' || m.kind === 'call-video';
     var b = document.createElement('div'); b.className = 'msg ' + (special ? '' : (m.isMe ? 'msg-me' : 'msg-them'));
     if(special){
       b.style.alignSelf = 'center'; b.style.maxWidth = '92%';
-      b.style.background = m.kind==='kia' ? 'rgba(217,85,63,.18)' : 'rgba(232,162,61,.18)';
-      b.style.border = '0.5px solid ' + (m.kind==='kia' ? 'var(--danger)' : 'var(--squad)');
+      b.style.background = m.kind==='kia' ? 'rgba(217,85,63,.18)' : (m.kind==='call-voice' || m.kind==='call-video' ? 'rgba(91,184,232,.18)' : 'rgba(232,162,61,.18)');
+      b.style.border = '0.5px solid ' + (m.kind==='kia' ? 'var(--danger)' : (m.kind==='call-voice' || m.kind==='call-video' ? 'var(--you)' : 'var(--squad)'));
     }
     var html = '<div class="msg-sender">' + m.sender + '</div>';
     if(m.text) html += '<div>' + m.text + '</div>';
     if(m.audio) html += '<audio controls src="' + m.audio.url + '"></audio>';
     b.innerHTML = html;
+    if(m.kind === 'call-voice' || m.kind === 'call-video'){
+      var joinBtn = document.createElement('button');
+      joinBtn.textContent = m.kind === 'call-voice' ? '🎙️ Entrar na chamada' : '🎥 Entrar na chamada';
+      joinBtn.style.cssText = 'display:block; margin-top:6px; width:100%; padding:8px; border-radius:8px; background:var(--you); color:#062033; border:none; font-family:var(--sans); font-size:12px; font-weight:600;';
+      joinBtn.addEventListener('click', function(){ joinCall(jitsiRoomName(), m.kind === 'call-voice'); });
+      b.appendChild(joinBtn);
+    }
     if(m.image){
       var img = document.createElement('img'); img.src = m.image.url;
       img.addEventListener('click', function(){ openPhotoViewer(m.image.url); });
@@ -1701,7 +1709,7 @@ function dmRoomName(otherId){
 function joinCall(roomName, voiceOnly){
   var name = encodeURIComponent(callsignEl().value || 'VOCÊ');
   var extra = voiceOnly ? '&config.startAudioOnly=true' : '';
-  var url = 'https://meet.jit.si/' + roomName + '#userInfo.displayName=%22' + name + '%22' + extra;
+  var url = 'https://meet.jit.si/' + roomName + '#userInfo.displayName=%22' + name + '%22' + extra + '&config.disableDeepLinking=true';
   document.getElementById('call-widget-frame').src = url;
   document.getElementById('call-widget').classList.add('on');
   document.getElementById('call-widget').classList.remove('minimized');
@@ -1752,7 +1760,14 @@ document.getElementById('call-widget-min').addEventListener('click', function(){
   window.addEventListener('mousemove', function(e){ move(e.clientX, e.clientY); });
   window.addEventListener('mouseup', end);
 })();
-function joinPartyCall(voiceOnly){ joinCall(jitsiRoomName(), voiceOnly); }
+function joinPartyCall(voiceOnly){
+  joinCall(jitsiRoomName(), voiceOnly);
+  if(sb){
+    var sender = callsignEl().value || 'VOCÊ';
+    var text = (voiceOnly ? '🎙️ Chamada de voz' : '🎥 Chamada de vídeo') + ' da party começou.';
+    sb.from('messages').insert({ party_code:partyCode, sender:sender, body:text, kind: voiceOnly ? 'call-voice' : 'call-video' }).then(function(){});
+  }
+}
 function startIndividualCall(peerId, peerName, voiceOnly){
   if(callSignalChannel) callSignalChannel.send({ type:'broadcast', event:'ring', payload:{ to:peerId, from:myId, fromName:callsignEl().value || 'VOCÊ', voiceOnly:!!voiceOnly } });
   joinCall(dmRoomName(peerId), voiceOnly);
@@ -1786,6 +1801,27 @@ function renderParty(){
     row.innerHTML = '<div class="swatch" style="background:var(--squad)"></div><div class="row-main"><div class="row-name">'+s.name+'</div></div>';
     var tag = document.createElement('span'); tag.className='status-tag status-conectado'; tag.textContent='Conectado';
     row.appendChild(tag); list.appendChild(row);
+  });
+
+  var pof = document.getElementById('party-online-friends');
+  pof.innerHTML = '';
+  if(!session){ return; }
+  var onlineFriendIds = Object.keys(friends).filter(function(fid){ return onlineFriends[fid] && !squad[fid]; });
+  if(onlineFriendIds.length === 0) return;
+  var h = document.createElement('div'); h.className = 'modal-label'; h.style.margin = '10px 0 4px'; h.textContent = 'Amigos online (fora da party)';
+  pof.appendChild(h);
+  onlineFriendIds.forEach(function(fid){
+    var f = friends[fid];
+    var row2 = document.createElement('div'); row2.className = 'row'; row2.style.cursor = 'default';
+    var sw2 = document.createElement('div'); sw2.className = 'swatch'; sw2.style.background = 'var(--ok)';
+    var main2 = document.createElement('div'); main2.className = 'row-main';
+    main2.innerHTML = '<div class="row-name">' + (f.callsign || '...') + '</div><div class="row-coord">Online</div>';
+    row2.appendChild(sw2); row2.appendChild(main2);
+    var inv2 = document.createElement('button'); inv2.className = 'row-del'; inv2.style.width = 'auto'; inv2.style.padding = '0 10px'; inv2.style.color = 'var(--you)';
+    inv2.textContent = 'Convidar';
+    inv2.addEventListener('click', function(){ inviteFriend(fid); });
+    row2.appendChild(inv2);
+    pof.appendChild(row2);
   });
 }
 document.getElementById('party-copy').addEventListener('click', function(){
@@ -2383,6 +2419,7 @@ function joinPresence(){
       onlineFriends[uid] = true;
     });
     if(activeTab === 'friends') renderFriends();
+    if(activeTab === 'party') renderParty();
   }).subscribe(function(status){
     if(status === 'SUBSCRIBED') presenceChannel.track({ callsign: myProfile.callsign, online_at:new Date().toISOString() });
   });
