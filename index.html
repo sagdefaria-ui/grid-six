@@ -231,7 +231,7 @@
   #call-widget.on{ display:flex; }
   #call-widget.big{ width:320px; height:460px; }
   #call-widget.minimized{ width:150px; height:38px; }
-  #call-widget.minimized #call-widget-frame{ height:1px; min-height:1px; opacity:0; pointer-events:none; flex:none; }
+  #call-widget.minimized #call-widget-media{ height:0; min-height:0; padding:0; overflow:hidden; }
   #call-widget-bar{
     display:flex; align-items:center; justify-content:space-between; padding:6px 10px; gap:6px;
     background:var(--panel-2); font-size:11.5px; color:var(--you); flex-shrink:0; touch-action:none; cursor:move;
@@ -239,7 +239,6 @@
   #call-widget-label{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #call-widget-min{ background:none; border:none; color:var(--you); font-size:14px; padding:2px 6px; }
   #call-widget-close{ background:none; border:none; color:var(--danger); font-size:14px; padding:2px 6px; }
-  #call-widget-frame{ flex:1; }
   #big-alert{
     position:absolute; top:50%; left:12px; right:12px; transform:translateY(-50%); z-index:900;
     background:rgba(20,10,8,.95); border:1.5px solid var(--danger); border-radius:14px;
@@ -457,7 +456,7 @@
     <button id="call-widget-min" title="Minimizar">➖</button>
     <button id="call-widget-close" title="Encerrar chamada">✕</button>
   </div>
-  <iframe id="call-widget-frame" allow="camera; microphone; autoplay" style="width:100%; height:100%; border:0;"></iframe>
+  <div id="call-widget-media" style="flex:1; position:relative; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px;"></div>
 </div>
 <div id="big-alert"></div>
 <button id="immersive-btn" title="Esconder menus">⛶</button>
@@ -1563,7 +1562,7 @@ function renderChat(){
       var joinBtn = document.createElement('button');
       joinBtn.textContent = m.kind === 'call-voice' ? '🎙️ Entrar na chamada' : '🎥 Entrar na chamada';
       joinBtn.style.cssText = 'display:block; margin-top:6px; width:100%; padding:8px; border-radius:8px; background:var(--you); color:#062033; border:none; font-family:var(--sans); font-size:12px; font-weight:600;';
-      joinBtn.addEventListener('click', function(){ joinCall(jitsiRoomName(), m.kind === 'call-voice'); });
+      joinBtn.addEventListener('click', function(){ joinCallRoom(callRoomIdParty(), m.kind !== 'call-voice'); });
       b.appendChild(joinBtn);
     }
     if(m.image){
@@ -1695,37 +1694,121 @@ pttBtn.addEventListener('pointerup', stopRecording);
 pttBtn.addEventListener('pointercancel', stopRecording);
 pttBtn.addEventListener('pointerleave', function(){ if(recording) stopRecording(); });
 
-// ---------- chamadas via Jitsi Meet (grupo da party + individual, em aba externa) ----------
+// ---------- chamadas diretas (WebRTC próprio, com servidor de retransmissão gratuito) ----------
+var CALL_ICE_SERVERS = { iceServers: [
+  { urls:'stun:stun.relay.metered.ca:80' },
+  { urls:'turn:global.relay.metered.ca:80', username:'openrelayproject', credential:'openrelayproject' },
+  { urls:'turn:global.relay.metered.ca:443', username:'openrelayproject', credential:'openrelayproject' },
+  { urls:'turn:global.relay.metered.ca:443?transport=tcp', username:'openrelayproject', credential:'openrelayproject' }
+]};
 var callSignalChannel = null;
-function jitsiRoomName(){
-  // nome ofuscado pra não ser óbvio de adivinhar por quem não tem o código da party
-  var salt = 'gx7f';
-  return 'gridsix-' + salt + '-' + partyCode.replace(/[^a-zA-Z0-9]/g, '');
+var callRoomChannel = null;
+var callPeers = {};
+var localCallStream = null;
+var currentCallRoom = null;
+var currentCallIsVideo = false;
+
+function callRoomIdParty(){ return 'party-' + partyCode.replace(/[^a-zA-Z0-9]/g, ''); }
+function callRoomIdDM(otherId){ var ids = [myId, otherId].sort(); return 'dm-' + ids[0] + '-' + ids[1]; }
+function sendCallSignal(payload){ if(callRoomChannel) callRoomChannel.send({ type:'broadcast', event:'wrtc', payload:payload }); }
+
+function addRemoteMedia(peerId, stream){
+  var el = document.getElementById('call-remote-' + peerId);
+  if(!el){
+    el = document.createElement(currentCallIsVideo ? 'video' : 'audio');
+    el.id = 'call-remote-' + peerId;
+    el.autoplay = true; el.playsInline = true;
+    if(currentCallIsVideo) el.style.cssText = 'width:100%; border-radius:6px; background:#000;';
+    document.getElementById('call-widget-media').appendChild(el);
+  }
+  el.srcObject = stream;
 }
-function dmRoomName(otherId){
-  var ids = [myId, otherId].sort();
-  var combo = (ids[0] + ids[1]).replace(/[^a-zA-Z0-9]/g, '').slice(0, 28);
-  return 'gridsix-dm-' + combo;
+function removeRemoteMedia(peerId){
+  var el = document.getElementById('call-remote-' + peerId);
+  if(el) el.remove();
 }
-function joinCall(roomName, voiceOnly){
-  var name = encodeURIComponent(callsignEl().value || 'VOCÊ');
-  var extra = voiceOnly ? '&config.startAudioOnly=true' : '';
-  var url = 'https://meet.jit.si/' + roomName + '#userInfo.displayName=%22' + name + '%22' + extra + '&config.disableDeepLinking=true';
-  document.getElementById('call-widget-frame').src = url;
+function createCallPeer(peerId){
+  var pc = new RTCPeerConnection(CALL_ICE_SERVERS);
+  if(localCallStream) localCallStream.getTracks().forEach(function(t){ pc.addTrack(t, localCallStream); });
+  pc.onicecandidate = function(e){ if(e.candidate) sendCallSignal({ to:peerId, from:myId, type:'ice', candidate:e.candidate }); };
+  pc.ontrack = function(e){ addRemoteMedia(peerId, e.streams[0]); };
+  callPeers[peerId] = pc;
+  return pc;
+}
+function closeCallPeer(peerId){
+  if(callPeers[peerId]){ callPeers[peerId].close(); delete callPeers[peerId]; }
+  removeRemoteMedia(peerId);
+}
+function handleCallSignal(msg){
+  if(!msg || msg.to !== myId) return;
+  if(msg.type === 'offer'){
+    var pc = callPeers[msg.from] || createCallPeer(msg.from);
+    pc.setRemoteDescription(new RTCSessionDescription(msg.sdp)).then(function(){ return pc.createAnswer(); })
+      .then(function(a){ return pc.setLocalDescription(a); })
+      .then(function(){ sendCallSignal({ to:msg.from, from:myId, type:'answer', sdp:pc.localDescription }); });
+  } else if(msg.type === 'answer'){
+    var pc2 = callPeers[msg.from]; if(pc2) pc2.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+  } else if(msg.type === 'ice'){
+    var pc3 = callPeers[msg.from]; if(pc3 && msg.candidate) pc3.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(function(){});
+  }
+}
+function joinCallRoom(roomId, isVideo){
+  if(currentCallRoom === roomId) return;
+  if(currentCallRoom) leaveCallWidget();
+  currentCallRoom = roomId; currentCallIsVideo = isVideo;
+  document.getElementById('call-widget-label').textContent = isVideo ? '🎥 Chamada de vídeo' : '🎙️ Chamada de voz';
+  document.getElementById('call-widget-media').innerHTML = '';
   document.getElementById('call-widget').classList.add('on');
+  document.getElementById('call-widget').classList.toggle('big', isVideo);
   document.getElementById('call-widget').classList.remove('minimized');
+  document.getElementById('call-widget-min').textContent = '➖';
   document.getElementById('call-widget').style.left = '';
   document.getElementById('call-widget').style.right = '10px';
   document.getElementById('call-widget').style.top = '';
-  document.getElementById('call-widget-min').textContent = '➖';
-  document.getElementById('call-widget').classList.toggle('big', !voiceOnly);
-  document.getElementById('call-widget-label').textContent = voiceOnly ? '🎙️ Chamada de voz' : '🎥 Chamada de vídeo';
+
+  navigator.mediaDevices.getUserMedia({ audio:true, video:isVideo }).then(function(stream){
+    localCallStream = stream;
+    if(isVideo){
+      var localEl = document.createElement('video'); localEl.id = 'call-local-video';
+      localEl.autoplay = true; localEl.playsInline = true; localEl.muted = true;
+      localEl.style.cssText = 'width:70px; border-radius:6px; position:absolute; right:14px; top:14px; border:1px solid var(--you); z-index:2; background:#000;';
+      localEl.srcObject = stream;
+      document.getElementById('call-widget-media').appendChild(localEl);
+    }
+    callRoomChannel = sb.channel('callroom-' + roomId, { config:{ presence:{ key:myId }, broadcast:{ self:false } } });
+    callRoomChannel.on('broadcast', { event:'wrtc' }, function(msg){ handleCallSignal(msg.payload); });
+    callRoomChannel.on('presence', { event:'sync' }, function(){
+      var state = callRoomChannel.presenceState();
+      Object.keys(state).forEach(function(pid){
+        if(pid === myId || callPeers[pid]) return;
+        if(myId > pid){
+          var pc = createCallPeer(pid);
+          pc.createOffer().then(function(o){ return pc.setLocalDescription(o); }).then(function(){
+            sendCallSignal({ to:pid, from:myId, type:'offer', sdp:pc.localDescription });
+          });
+        }
+      });
+    });
+    callRoomChannel.on('presence', { event:'leave' }, function(payload){
+      (payload.leftPresences || []).forEach(function(p){ closeCallPeer(p.key); });
+    });
+    callRoomChannel.subscribe(function(status){
+      if(status === 'SUBSCRIBED') callRoomChannel.track({ name: callsignEl().value || 'VOCÊ' });
+    });
+  }).catch(function(err){
+    alert('Não consegui acessar microfone/câmera: ' + err.message);
+    leaveCallWidget();
+  });
 }
-function closeCallWidget(){
-  document.getElementById('call-widget-frame').src = 'about:blank';
+function leaveCallWidget(){
+  Object.keys(callPeers).forEach(closeCallPeer);
+  if(localCallStream){ localCallStream.getTracks().forEach(function(t){ t.stop(); }); localCallStream = null; }
+  if(callRoomChannel){ sb.removeChannel(callRoomChannel); callRoomChannel = null; }
+  currentCallRoom = null;
   document.getElementById('call-widget').classList.remove('on');
+  document.getElementById('call-widget-media').innerHTML = '';
 }
-document.getElementById('call-widget-close').addEventListener('click', closeCallWidget);
+document.getElementById('call-widget-close').addEventListener('click', leaveCallWidget);
 document.getElementById('call-widget-min').addEventListener('click', function(){
   var w = document.getElementById('call-widget');
   w.classList.toggle('minimized');
@@ -1762,7 +1845,7 @@ document.getElementById('call-widget-min').addEventListener('click', function(){
   window.addEventListener('mouseup', end);
 })();
 function joinPartyCall(voiceOnly){
-  joinCall(jitsiRoomName(), voiceOnly);
+  joinCallRoom(callRoomIdParty(), !voiceOnly);
   if(sb){
     var sender = callsignEl().value || 'VOCÊ';
     var text = (voiceOnly ? '🎙️ Chamada de voz' : '🎥 Chamada de vídeo') + ' da party começou.';
@@ -1771,7 +1854,7 @@ function joinPartyCall(voiceOnly){
 }
 function startIndividualCall(peerId, peerName, voiceOnly){
   if(callSignalChannel) callSignalChannel.send({ type:'broadcast', event:'ring', payload:{ to:peerId, from:myId, fromName:callsignEl().value || 'VOCÊ', voiceOnly:!!voiceOnly } });
-  joinCall(dmRoomName(peerId), voiceOnly);
+  joinCallRoom(callRoomIdDM(peerId), !voiceOnly);
 }
 document.getElementById('party-call-voice-btn').addEventListener('click', function(){ joinPartyCall(true); });
 document.getElementById('party-call-video-btn').addEventListener('click', function(){ joinPartyCall(false); });
@@ -1782,7 +1865,7 @@ function setupCallSignal(){
   callSignalChannel.on('broadcast', { event:'ring' }, function(msg){
     var p = msg.payload;
     if(!p || p.to !== myId) return;
-    if(confirm((p.fromName || 'Alguém') + ' está te chamando' + (p.voiceOnly ? ' (voz)' : ' (vídeo)') + '. Atender?')) joinCall(dmRoomName(p.from), p.voiceOnly);
+    if(confirm((p.fromName || 'Alguém') + ' está te chamando' + (p.voiceOnly ? ' (voz)' : ' (vídeo)') + '. Atender?')) joinCallRoom(callRoomIdDM(p.from), !p.voiceOnly);
   }).subscribe();
 }
 function teardownCallSignal(){ if(callSignalChannel){ sb.removeChannel(callSignalChannel); callSignalChannel = null; } }
@@ -2103,7 +2186,7 @@ function subscribeParty(){
 }
 
 function switchParty(code){
-  closeCallWidget();
+  leaveCallWidget();
   teardownCallSignal();
   partyCode = code;
   localStorage.setItem('gridsix-party-code', partyCode);
