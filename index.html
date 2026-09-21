@@ -555,12 +555,9 @@
     <div id="party-list"></div>
     <div id="invite-bar" style="flex-direction:column">
       <input id="join-name-input" placeholder="Seu nome (ex: Falcão)">
-      <div style="display:flex; gap:8px; width:100%">
-        <input id="invite-input" placeholder="Código da party (ex: GS-4821)" style="flex:1">
-        <button id="invite-btn">Entrar</button>
-      </div>
+      <button id="save-name-btn" style="width:100%">Salvar nome</button>
     </div>
-    <div id="party-hint">Compartilhe o código acima com seu esquadrão — quem digitar o mesmo código se conecta com você em tempo real.</div>
+    <div id="party-hint">Convide amigos pela aba Amigos — assim que aceitarem, eles entram automaticamente na sua party.</div>
     <div id="app-credit">Grid Six — criado por sagdefaria</div>
   </div>
 
@@ -1797,27 +1794,18 @@ document.getElementById('party-copy').addEventListener('click', function(){
     btn.textContent = 'Copiado!'; setTimeout(function(){ btn.textContent = 'Copiar'; }, 1500);
   });
 });
-document.getElementById('invite-btn').addEventListener('click', joinParty);
-document.getElementById('invite-input').addEventListener('keydown', function(e){ if(e.key==='Enter') joinParty(); });
-document.getElementById('join-name-input').addEventListener('keydown', function(e){ if(e.key==='Enter') joinParty(); });
-function joinParty(){
+document.getElementById('join-name-input').addEventListener('keydown', function(e){ if(e.key==='Enter') saveMyName(); });
+document.getElementById('save-name-btn').addEventListener('click', saveMyName);
+function saveMyName(){
   var nameInput = document.getElementById('join-name-input');
   var newName = nameInput.value.trim();
-  if(newName){
-    callsignEl().value = newName;
-    localStorage.setItem('gridsix-callsign', newName);
-    youMarker.setIcon(iconYou(newName));
-    refreshYouConeRef();
-    nameInput.value = '';
-  }
-  var input = document.getElementById('invite-input');
-  var code = input.value.trim().toUpperCase();
-  if(code && code !== partyCode){
-    switchParty(code);
-    input.value = '';
-  } else if(newName){
-    pushMyPosition(true);
-  }
+  if(!newName) return;
+  callsignEl().value = newName;
+  localStorage.setItem('gridsix-callsign', newName);
+  youMarker.setIcon(iconYou(newName));
+  refreshYouConeRef();
+  nameInput.value = '';
+  pushMyPosition(true);
 }
 
 // ---------- ponte com o backend ----------
