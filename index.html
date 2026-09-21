@@ -229,10 +229,14 @@
   }
   #call-widget.on{ display:flex; }
   #call-widget.big{ width:300px; height:260px; }
+  #call-widget.minimized{ width:150px; height:38px; }
+  #call-widget.minimized #call-widget-frame{ height:1px; min-height:1px; opacity:0; pointer-events:none; flex:none; }
   #call-widget-bar{
-    display:flex; align-items:center; justify-content:space-between; padding:6px 10px;
-    background:var(--panel-2); font-size:11.5px; color:var(--you); flex-shrink:0;
+    display:flex; align-items:center; justify-content:space-between; padding:6px 10px; gap:6px;
+    background:var(--panel-2); font-size:11.5px; color:var(--you); flex-shrink:0; touch-action:none; cursor:move;
   }
+  #call-widget-label{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #call-widget-min{ background:none; border:none; color:var(--you); font-size:14px; padding:2px 6px; }
   #call-widget-close{ background:none; border:none; color:var(--danger); font-size:14px; padding:2px 6px; }
   #call-widget-frame{ flex:1; }
   #big-alert{
@@ -449,6 +453,7 @@
 <div id="call-widget">
   <div id="call-widget-bar">
     <span id="call-widget-label">🎙️ Chamada de voz</span>
+    <button id="call-widget-min" title="Minimizar">➖</button>
     <button id="call-widget-close" title="Encerrar chamada">✕</button>
   </div>
   <iframe id="call-widget-frame" allow="camera; microphone; autoplay" style="width:100%; height:100%; border:0;"></iframe>
@@ -1702,6 +1707,11 @@ function joinCall(roomName, voiceOnly){
   var url = 'https://meet.jit.si/' + roomName + '#userInfo.displayName=%22' + name + '%22' + extra;
   document.getElementById('call-widget-frame').src = url;
   document.getElementById('call-widget').classList.add('on');
+  document.getElementById('call-widget').classList.remove('minimized');
+  document.getElementById('call-widget').style.left = '';
+  document.getElementById('call-widget').style.right = '10px';
+  document.getElementById('call-widget').style.top = '';
+  document.getElementById('call-widget-min').textContent = '➖';
   document.getElementById('call-widget').classList.toggle('big', !voiceOnly);
   document.getElementById('call-widget-label').textContent = voiceOnly ? '🎙️ Chamada de voz' : '🎥 Chamada de vídeo';
 }
@@ -1710,6 +1720,41 @@ function closeCallWidget(){
   document.getElementById('call-widget').classList.remove('on');
 }
 document.getElementById('call-widget-close').addEventListener('click', closeCallWidget);
+document.getElementById('call-widget-min').addEventListener('click', function(){
+  var w = document.getElementById('call-widget');
+  w.classList.toggle('minimized');
+  this.textContent = w.classList.contains('minimized') ? '⬜' : '➖';
+});
+(function(){
+  var widget = document.getElementById('call-widget');
+  var bar = document.getElementById('call-widget-bar');
+  var dragging = false, offX = 0, offY = 0;
+  function start(clientX, clientY, target){
+    if(target.closest && target.closest('button')) return;
+    dragging = true;
+    var r = widget.getBoundingClientRect();
+    offX = clientX - r.left; offY = clientY - r.top;
+    widget.style.right = 'auto';
+    widget.style.left = r.left + 'px';
+    widget.style.top = r.top + 'px';
+  }
+  function move(clientX, clientY){
+    if(!dragging) return;
+    var w = widget.offsetWidth, h = widget.offsetHeight;
+    var x = Math.max(4, Math.min(window.innerWidth - w - 4, clientX - offX));
+    var y = Math.max(4, Math.min(window.innerHeight - h - 4, clientY - offY));
+    widget.style.left = x + 'px';
+    widget.style.top = y + 'px';
+  }
+  function end(){ dragging = false; }
+  bar.addEventListener('touchstart', function(e){ var t = e.touches[0]; start(t.clientX, t.clientY, e.target); }, { passive:true });
+  bar.addEventListener('touchmove', function(e){ var t = e.touches[0]; move(t.clientX, t.clientY); }, { passive:true });
+  bar.addEventListener('touchend', end);
+  bar.addEventListener('touchcancel', end);
+  bar.addEventListener('mousedown', function(e){ start(e.clientX, e.clientY, e.target); });
+  window.addEventListener('mousemove', function(e){ move(e.clientX, e.clientY); });
+  window.addEventListener('mouseup', end);
+})();
 function joinPartyCall(voiceOnly){ joinCall(jitsiRoomName(), voiceOnly); }
 function startIndividualCall(peerId, peerName, voiceOnly){
   if(callSignalChannel) callSignalChannel.send({ type:'broadcast', event:'ring', payload:{ to:peerId, from:myId, fromName:callsignEl().value || 'VOCÊ', voiceOnly:!!voiceOnly } });
