@@ -10,7 +10,13 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#12140F">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com">
+<link rel="preconnect" href="https://oxakoccszlcdxayiuhun.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="https://unpkg.com">
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+<link rel="dns-prefetch" href="https://server.arcgisonline.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root{
@@ -62,20 +68,13 @@
   #compass-btn.on{color:var(--you); border-color:var(--you);}
   #compass-btn:active{background:var(--panel-2);}
 
-  /* aviso de protótipo */
-  #banner{
-    position:absolute; top:56px; left:12px; right:12px; z-index:499;
-    background:var(--panel); border:0.5px solid var(--border); border-radius:8px;
-    padding:8px 12px; font-size:12px; color:var(--text-secondary); display:flex; gap:8px; align-items:flex-start;
-  }
-  #banner b{color:var(--text-primary); font-weight:500;}
-  #banner button{background:none; border:none; color:var(--text-muted); font-size:16px; line-height:1; margin-left:auto; padding:0 2px;}
   #track-chip{
     position:absolute; top:56px; left:12px; right:12px; z-index:498;
     background:var(--panel); border:0.5px solid var(--you); border-radius:8px;
     padding:8px 12px; font-size:12px; color:var(--text-primary); display:none; align-items:center; gap:8px;
   }
   #track-chip b{font-weight:600;}
+  #track-text{flex:1; min-width:0;}
   #track-chip button{background:none; border:none; color:var(--text-muted); font-size:16px; line-height:1; margin-left:auto; padding:0 2px;}
 
   /* marcadores */
@@ -253,7 +252,8 @@
   }
   body.landscape #immersive-btn{ display:flex; }
   #immersive-btn.on{ color:var(--you); border-color:var(--you); }
-  body.immersive #hud, body.immersive #banner, body.immersive #maphint, body.immersive #sheet{ display:none !important; }
+  body.immersive #hud, body.immersive #maphint, body.immersive #sheet{ display:none !important; }
+  body.landscape.immersive #view3d-btn{ bottom:124px; }
 
   /* Comunicação */
   #comms-panel{display:none; flex-direction:column; flex:1; min-height:0;}
@@ -368,6 +368,7 @@
   .lb-row.me{ color:var(--you); font-weight:600; }
   .lb-name{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .lb-num{ font-family:var(--mono); font-size:11px; color:var(--text-secondary); width:34px; text-align:right; }
+  #wp-name{
     width:100%; background:var(--panel-2); border:0.5px solid var(--border); border-radius:8px;
     color:var(--text-primary); font-family:var(--sans); font-size:14px; padding:9px 10px;
   }
@@ -378,8 +379,21 @@
   #auth-gate{ z-index:1000; }
   #auth-gate .modal-card{ width:min(340px,100%); }
   #auth-tabs .tab.active{ background:var(--you); border-color:var(--you); color:#062033; }
-  #auth-error{ color:var(--danger); font-size:12px; min-height:16px; margin-bottom:2px; }
-  #auth-skip{ width:100%; margin-top:12px; background:none; border:none; color:var(--text-muted); font-size:12px; padding:6px; }
+  #auth-sub{ font-size:12px; color:var(--text-secondary); margin:-4px 0 12px; }
+  #auth-gate .modal-label{ display:block; margin:0 0 5px; }
+  #auth-gate .modal-input{ font-size:16px; padding:11px 12px; margin-bottom:10px; }
+  #auth-gate .modal-input:focus{ outline:none; border-color:var(--you); }
+  .pass-wrap{ position:relative; }
+  .pass-wrap .modal-input{ padding-right:46px; }
+  #auth-pass-toggle{ position:absolute; right:4px; top:4px; width:38px; height:36px; background:none; border:none; color:var(--text-secondary); font-size:16px; }
+  #auth-error{ color:var(--danger); font-size:12px; line-height:1.4; min-height:17px; margin-bottom:2px; }
+  #auth-error.ok{ color:var(--ok); }
+  #auth-submit{ flex:none; width:100%; background:var(--you); color:#062033; padding:13px; font-size:14px; }
+  #auth-submit:disabled{ opacity:.6; }
+  #auth-gate .modal-actions{ margin-top:8px; }
+  #auth-forgot, #auth-skip{ width:100%; background:none; border:none; color:var(--text-muted); font-size:12px; padding:6px; }
+  #auth-forgot{ margin-top:10px; color:var(--text-secondary); }
+  #auth-skip{ margin-top:4px; }
   #friends-panel{display:none; flex-direction:column; flex:1; min-height:0;}
   #history-panel{display:none; flex-direction:column; flex:1; min-height:0;}
   #history-list{overflow-y:auto; padding:0 14px 10px; flex:1;}
@@ -423,11 +437,92 @@
     border-radius:0; border-top:none; border-left:0.5px solid var(--border-strong);
     max-height:none; padding-top:env(safe-area-inset-top,0px);
   }
+
+  /* ================= TEMA TÁTICO ================= */
+  :root{
+    --bg:#0C0E09; --panel:#151A10; --panel-2:#1D2416; --border:#34402A; --border-strong:#566841;
+    --text-primary:#E6E3CF; --text-secondary:#A6A98B; --text-muted:#6D715A;
+    --ok:#8BC34A; --tac:#B5C36A; --stencil:'Black Ops One','JetBrains Mono',monospace;
+  }
+  #hud{ background:linear-gradient(to bottom, rgba(12,14,9,.95), rgba(12,14,9,.55) 70%, rgba(12,14,9,0)); }
+  #callsign{ letter-spacing:.08em; text-transform:uppercase; }
+  .status-pill, #fmt-toggle, #compass-btn{ border-radius:3px; border-width:1px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.06em; }
+  .status-pill{ font-size:10px; }
+  #track-chip, #maphint, #map-toast{ border-radius:3px; border-width:1px; font-family:var(--mono); font-size:11px; letter-spacing:.02em; }
+  #map-toast{
+    position:absolute; top:calc(env(safe-area-inset-top,0px) + 96px); left:50%; transform:translateX(-50%); z-index:498;
+    max-width:86vw; text-align:center; background:var(--panel); border:1px solid var(--tac); color:var(--text-primary);
+    padding:7px 12px; pointer-events:none; opacity:0; transition:opacity .25s;
+  }
+  #map-toast.show{ opacity:1; }
+  #sheet{
+    border-top:1px solid var(--border-strong); border-radius:6px 6px 0 0;
+    background-color:var(--panel);
+    background-image:linear-gradient(rgba(181,195,106,.028) 1px, transparent 1px), linear-gradient(90deg, rgba(181,195,106,.028) 1px, transparent 1px);
+    background-size:24px 24px;
+    box-shadow:0 -6px 18px rgba(0,0,0,.45);
+  }
+  #grip{ width:54px; height:3px; border-radius:0; background:var(--tac); opacity:.55; }
+  .tab{ font-family:var(--mono); font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; border-radius:3px; border-width:1px; padding:8px 11px; }
+  .tab.active{ color:#12140F; background:var(--tac); border-color:var(--tac); }
+  .row-name{ font-family:var(--mono); font-size:12.5px; font-weight:700; letter-spacing:.03em; }
+  .row-del, .list-toolbar button, #addbar input, #addbar button, #chat-bar input, #chat-bar button, #photo-btn, #ptt,
+  #invite-bar input, #invite-bar button, #friend-search-bar input, #friend-search-bar button, #party-code, #party-code button,
+  #timer-box, #timer-box button, #score-box, #score-buttons button, #new-match-btn, .hist-match, .modal-input, #wp-name,
+  .chip-icon, .chip-weight, .msg, #retention-select{ border-radius:3px; }
+  .list-toolbar button, #addbar button, #chat-bar button, #invite-bar button, #friend-search-bar button, #score-buttons button,
+  #new-match-btn, #party-code button, .modal-actions button, #ptt{ font-family:var(--mono); text-transform:uppercase; letter-spacing:.06em; font-size:11.5px; }
+  .empty{ font-family:var(--mono); font-size:11px; letter-spacing:.02em; }
+  .status-tag{ border-radius:2px; text-transform:uppercase; letter-spacing:.06em; }
+  .pin-label{ border-radius:2px; border-width:1px; letter-spacing:.05em; text-transform:uppercase; }
+  #locate-btn, #layer-toggle, #add-point-btn, #kia-btn, #kill-btn-float, #immersive-btn, #view3d-btn{
+    border-radius:6px; border:1px solid var(--border-strong);
+    box-shadow:0 2px 8px rgba(0,0,0,.55), inset 0 0 0 1px rgba(0,0,0,.35);
+  }
+  #view3d-btn{
+    position:absolute; z-index:499; width:46px; height:46px; left:14px; bottom:calc(50vh + 16px + 16px + 108px);
+    background:var(--panel); color:var(--text-secondary); font-family:var(--mono); font-size:13px; font-weight:700; letter-spacing:.04em;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #view3d-btn.on{ color:var(--tac); border-color:var(--tac); background:rgba(181,195,106,.14); }
+  #view3d-btn:active{ background:var(--panel-2); }
+  body.landscape #view3d-btn{ bottom:124px; }
+  #layer-toggle.on{ color:var(--tac); border-color:var(--tac); }
+  #joystick-base{ border:1px solid rgba(181,195,106,.4); background:rgba(12,14,9,.35); }
+  #joystick-knob{ background:rgba(181,195,106,.4); border-color:rgba(181,195,106,.7); }
+  #big-alert{ font-family:var(--stencil); font-weight:400; font-size:18px; letter-spacing:.06em; text-transform:uppercase; border-radius:4px; border-width:2px; }
+  #timer-display{ letter-spacing:.06em; color:var(--tac); }
+  #app-credit{ font-family:var(--mono); letter-spacing:.08em; text-transform:uppercase; font-size:9px; }
+  .modal-card{ position:relative; border-radius:4px; border:1px solid var(--border-strong); box-shadow:0 12px 32px rgba(0,0,0,.6); }
+  .modal-card::before, .modal-card::after{ content:''; position:absolute; width:16px; height:16px; pointer-events:none; }
+  .modal-card::before{ top:-1px; left:-1px; border-top:2px solid var(--tac); border-left:2px solid var(--tac); }
+  .modal-card::after{ bottom:-1px; right:-1px; border-bottom:2px solid var(--tac); border-right:2px solid var(--tac); }
+  .modal-title{ font-family:var(--stencil); font-weight:400; font-size:16px; letter-spacing:.07em; text-transform:uppercase; color:var(--tac); }
+  .modal-label{ font-family:var(--mono); font-size:10px; letter-spacing:.11em; text-transform:uppercase; }
+  .modal-actions button{ border-radius:3px; }
+  #auth-gate{
+    background:
+      linear-gradient(rgba(181,195,106,.05) 1px, transparent 1px) 0 0/28px 28px,
+      linear-gradient(90deg, rgba(181,195,106,.05) 1px, transparent 1px) 0 0/28px 28px,
+      radial-gradient(circle at 50% 28%, #1C2415 0%, #090B06 78%);
+  }
+  #auth-brand{ text-align:center; margin:2px 0 14px; }
+  #auth-logo{ font-family:var(--stencil); font-size:32px; letter-spacing:.09em; color:var(--tac); line-height:1; }
+  #auth-tag{ font-family:var(--mono); font-size:9px; letter-spacing:.2em; color:var(--text-muted); margin-top:7px; text-transform:uppercase; }
+  #auth-sub{ text-align:center; margin:0 0 12px; }
+  #auth-tabs{ justify-content:center; }
+  #auth-tabs .tab{ flex:1; }
+  #auth-submit{ font-family:var(--mono); letter-spacing:.1em; text-transform:uppercase; font-weight:700; font-size:13px; border-radius:3px; }
+
+  /* visão 3D */
+  #map3d{ position:absolute; inset:0; display:none; background:#0A0C07; }
+  .m3d{ white-space:nowrap; pointer-events:none; }
 </style>
 </head>
 <body>
 
 <div id="map"></div>
+<div id="map3d"></div>
 
 <div id="hud">
   <button id="you-icon-btn" title="Escolher ícone">●</button>
@@ -438,9 +533,11 @@
 </div>
 
 <div id="maphint">Toque no mapa para posicionar o ponto</div>
-<div id="track-chip"></div>
+<div id="map-toast"></div>
+<div id="track-chip"><span id="track-text"></span><button id="track-style-btn" title="Cor e espessura">🎨</button><button id="track-stop" title="Parar de rastrear">✕</button></div>
 <button id="locate-btn" title="Me localizar">🎯</button>
-<button id="layer-toggle" title="Alternar mapa/satélite">🛰️</button>
+<button id="layer-toggle" title="Trocar tipo de mapa">🛰️</button>
+<button id="view3d-btn" title="Visão 3D com relevo">3D</button>
 <button id="add-point-btn" title="Adicionar ponto">📍</button>
 <button id="kia-btn" title="Avisar que fui eliminado">💀</button>
 <button id="kill-btn-float" title="Marquei um kill">🔫</button>
@@ -456,23 +553,40 @@
 <div id="big-alert"></div>
 <button id="immersive-btn" title="Esconder menus">⛶</button>
 
-<div id="auth-gate" class="modal-overlay" style="display:flex; background:rgba(11,13,8,.97);">
-  <div class="modal-card">
-    <div class="modal-title">Grid Six</div>
-    <div class="chip-row" id="auth-tabs" style="margin-bottom:12px">
+<div id="auth-gate" class="modal-overlay" style="display:flex">
+  <form class="modal-card" id="auth-form" novalidate>
+    <div id="auth-brand">
+      <div id="auth-logo">GRID SIX</div>
+      <div id="auth-tag">Localização e comunicação tática</div>
+    </div>
+    <div id="auth-sub">Entre para sincronizar com seu esquadrão.</div>
+    <div class="chip-row" id="auth-tabs" style="margin-bottom:14px">
       <button type="button" class="tab active" data-mode="login">Entrar</button>
       <button type="button" class="tab" data-mode="signup">Criar conta</button>
     </div>
-    <input id="auth-callsign" class="modal-input" placeholder="Seu nome de operador" style="display:none">
-    <input id="auth-email" class="modal-input" placeholder="E-mail" type="email" autocapitalize="off">
-    <input id="auth-password" class="modal-input" placeholder="Senha" type="password">
-    <div id="auth-error"></div>
-    <div class="modal-actions">
-      <button id="auth-submit" style="flex:none; width:100%">Entrar</button>
+    <div id="auth-callsign-wrap" style="display:none">
+      <label class="modal-label" for="auth-callsign">Nome de operador</label>
+      <input id="auth-callsign" class="modal-input" placeholder="Ex.: Falcão" maxlength="12" autocomplete="nickname" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="next">
     </div>
-    <button id="auth-skip">Continuar sem conta</button>
-  </div>
+    <label class="modal-label" for="auth-email">E-mail</label>
+    <input id="auth-email" class="modal-input" placeholder="voce@email.com" type="email" inputmode="email" autocomplete="email" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="next">
+    <label class="modal-label" for="auth-password">Senha</label>
+    <div class="pass-wrap">
+      <input id="auth-password" class="modal-input" placeholder="Sua senha" type="password" autocomplete="current-password" enterkeyhint="go">
+      <button type="button" id="auth-pass-toggle" aria-label="Mostrar senha">👁</button>
+    </div>
+    <div id="auth-error" role="alert"></div>
+    <div class="modal-actions">
+      <button type="submit" id="auth-submit">Entrar</button>
+    </div>
+    <button type="button" id="auth-forgot">Esqueci minha senha</button>
+    <button type="button" id="auth-skip">Continuar sem conta</button>
+  </form>
 </div>
+<script>
+// evita o "flash" da tela de login pra quem já está logado ou escolheu jogar sem conta
+try{ if(localStorage.getItem('gridsix-guest')==='1' || localStorage.getItem('sb-oxakoccszlcdxayiuhun-auth-token')) document.getElementById('auth-gate').style.display='none'; }catch(e){}
+</script>
 
 <div id="sheet">
   <div id="grip"></div>
@@ -581,10 +695,10 @@
   <div class="modal-card">
     <div class="modal-title">Configurações da conta</div>
     <div class="modal-label" style="margin-top:0">Nome de operador</div>
-    <input id="acct-name" class="modal-input" placeholder="Seu nome">
+    <input id="acct-name" class="modal-input" placeholder="Seu nome" maxlength="12">
     <div class="modal-label">Nova senha</div>
-    <input id="acct-pass1" class="modal-input" type="password" placeholder="Nova senha (mín. 6 caracteres)">
-    <input id="acct-pass2" class="modal-input" type="password" placeholder="Confirmar nova senha">
+    <input id="acct-pass1" class="modal-input" type="password" autocomplete="new-password" placeholder="Nova senha (mín. 6 caracteres)">
+    <input id="acct-pass2" class="modal-input" type="password" autocomplete="new-password" placeholder="Confirmar nova senha">
     <div id="acct-error" style="font-size:12px; min-height:16px; color:var(--danger);"></div>
     <div class="modal-actions">
       <button id="acct-save-name" style="background:var(--you); color:#062033;">Salvar nome</button>
@@ -639,7 +753,6 @@
 </div>
 
 <input type="file" id="kml-input" accept=".kml,application/vnd.google-earth.kml+xml" style="display:none">
-<input type="file" id="intel-input" accept="application/pdf,image/*" style="display:none">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://unpkg.com/mgrs@2.1.0/dist/mgrs.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -650,6 +763,20 @@
 var SUPABASE_URL = 'https://oxakoccszlcdxayiuhun.supabase.co';
 var SUPABASE_KEY = 'sb_publishable_iHNNTjEdaR_et2CgMXjgVQ_-5QZqAfN';
 var sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+// ---------- utilitários ----------
+// todo texto vindo de outros jogadores passa por aqui antes de virar HTML
+function esc(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+function cssUrl(u){
+  u = String(u || '');
+  if(!/^(https?:|blob:)/i.test(u)) return '';
+  return esc(u.replace(/['"()\\\s]/g, function(c){ return '%' + c.charCodeAt(0).toString(16); }));
+}
+function safeColor(c){ return /^#[0-9a-fA-F]{3,8}$/.test(c || '') ? c : '#E85D24'; }
 
 function setSyncStatus(ok, label){
   var dot = document.getElementById('sync-dot');
@@ -675,7 +802,7 @@ if(!savedName){ savedName = 'OP-' + Math.floor(100 + Math.random()*900); localSt
 document.getElementById('callsign').value = savedName;
 
 // ---------- estado ----------
-var fmt = 'gps'; // 'gps' | 'mgrs'
+var fmt = localStorage.getItem('gridsix-fmt') === 'mgrs' ? 'mgrs' : 'gps';
 var you = { lat: -23.5505, lng: -46.6333, hasFix:false, alt:null, groundElev:null, agl:null };
 var squad = {};       // id -> {id,name,lat,lng,updated_at}
 var waypoints = {};   // id -> {id,label,lat,lng,icon,color}
@@ -698,37 +825,61 @@ function toggleHidden(id){
   if(activeTab==='points') renderList();
 }
 
-function metersToDeg(dx, dy, atLat){
-  var dlat = dy / 111320;
-  var dlng = dx / (111320 * Math.cos(atLat * Math.PI/180));
-  return { dlat:dlat, dlng:dlng };
-}
-
 // ---------- mapa ----------
 var map = L.map('map', { zoomControl:false, attributionControl:true }).setView([you.lat, you.lng], 17);
-var streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom:19, attribution:'© OpenStreetMap'
-});
-var satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom:19, attribution:'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics'
-});
-streetLayer.addTo(map);
-var usingSat = false;
+var ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
+var ESRI_SAT = ESRI + 'World_Imagery/MapServer/tile/{z}/{y}/{x}';
+var ESRI_LABELS = ESRI + 'Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
+var ESRI_ROADS = ESRI + 'Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}';
+var ESRI_ATTR = 'Imagens © Esri — Maxar, Earthstar Geographics';
+// maxNativeZoom: além do último nível disponível o mapa amplia a imagem em vez de ficar cinza
+function satTiles(){ return L.tileLayer(ESRI_SAT, { maxZoom:21, maxNativeZoom:19, attribution:ESRI_ATTR }); }
+var MAP_LAYERS = [
+  { id:'hybrid', name:'Satélite + nomes', layer:L.layerGroup([
+      satTiles(),
+      L.tileLayer(ESRI_ROADS, { maxZoom:21, maxNativeZoom:19 }),
+      L.tileLayer(ESRI_LABELS, { maxZoom:21, maxNativeZoom:19 })
+    ]) },
+  { id:'sat', name:'Satélite puro', layer:satTiles() },
+  { id:'topo', name:'Topográfico (curvas de nível)', layer:L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      maxZoom:21, maxNativeZoom:17, attribution:'© OpenTopoMap (CC-BY-SA) · © OpenStreetMap' }) },
+  { id:'street', name:'Ruas', layer:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom:21, maxNativeZoom:19, attribution:'© OpenStreetMap' }) }
+];
+map.setMaxZoom(21);
+var layerIdx = 0;
+(function(){
+  var saved = localStorage.getItem('gridsix-layer');
+  for(var i = 0; i < MAP_LAYERS.length; i++){ if(MAP_LAYERS[i].id === saved) layerIdx = i; }
+})();
+MAP_LAYERS[layerIdx].layer.addTo(map);
+var mapToastTimer = null;
+function mapToast(text, ms){
+  var el = document.getElementById('map-toast');
+  el.textContent = text; el.classList.add('show');
+  clearTimeout(mapToastTimer);
+  mapToastTimer = setTimeout(function(){ el.classList.remove('show'); }, ms || 1800);
+}
+document.getElementById('layer-toggle').classList.toggle('on', MAP_LAYERS[layerIdx].id !== 'street');
 document.getElementById('layer-toggle').addEventListener('click', function(){
-  if(usingSat){ map.removeLayer(satLayer); streetLayer.addTo(map); this.classList.remove('on'); }
-  else { map.removeLayer(streetLayer); satLayer.addTo(map); this.classList.add('on'); }
-  usingSat = !usingSat;
+  if(view3d){ mapToast('Na visão 3D o mapa é sempre satélite. Toque em 3D para voltar.', 2600); return; }
+  map.removeLayer(MAP_LAYERS[layerIdx].layer);
+  layerIdx = (layerIdx + 1) % MAP_LAYERS.length;
+  MAP_LAYERS[layerIdx].layer.addTo(map);
+  localStorage.setItem('gridsix-layer', MAP_LAYERS[layerIdx].id);
+  this.classList.toggle('on', MAP_LAYERS[layerIdx].id !== 'street');
+  mapToast('Mapa: ' + MAP_LAYERS[layerIdx].name);
 });
 
 function icon(cls, label){
   return L.divIcon({
-    className:'', html:'<div style="display:flex;align-items:center"><div class="pin ' + cls + '"></div><div class="pin-label">' + label + '</div></div>',
+    className:'', html:'<div style="display:flex;align-items:center"><div class="pin ' + cls + '"></div><div class="pin-label">' + esc(label) + '</div></div>',
     iconSize:[26,26], iconAnchor:[13,13]
   });
 }
 function iconWay(row){
   return L.divIcon({
-    className:'', html:'<div style="display:flex;align-items:center"><div class="pin-custom" style="background:' + row.color + '">' + row.icon + '</div><div class="pin-label">' + row.label + '</div></div>',
+    className:'', html:'<div style="display:flex;align-items:center"><div class="pin-custom" style="background:' + safeColor(row.color) + '">' + esc(row.icon) + '</div><div class="pin-label">' + esc(row.label) + '</div></div>',
     iconSize:[26,26], iconAnchor:[13,13]
   });
 }
@@ -760,13 +911,13 @@ var youPhotoUrl = localStorage.getItem('gridsix-you-photo') || null;
 function iconYou(label){
   var bodyHtml;
   if(youPhotoUrl){
-    bodyHtml = '<div class="pin-3d pin-photo" style="background-image:url(\'' + youPhotoUrl + '\')"></div>';
+    bodyHtml = '<div class="pin-3d pin-photo" style="background-image:url(\'' + cssUrl(youPhotoUrl) + '\')"></div>';
   } else {
     var chosen = YOU_ICONS.find(function(o){ return o.id === youIconId; }) || YOU_ICONS[0];
     bodyHtml = '<div class="pin-3d">' + (chosen.glyph || '') + '</div>';
   }
   return L.divIcon({
-    className:'', html:'<div style="display:flex;align-items:center"><div class="youwrap"><div class="dir"><div class="cone"></div><div class="nose"></div></div>' + bodyHtml + '</div><div class="pin-label">' + label + '</div></div>',
+    className:'', html:'<div style="display:flex;align-items:center"><div class="youwrap"><div class="dir"><div class="cone"></div><div class="nose"></div></div>' + bodyHtml + '</div><div class="pin-label">' + esc(label) + '</div></div>',
     iconSize:[32,32], iconAnchor:[16,16]
   });
 }
@@ -774,14 +925,14 @@ function callsignEl(){ return document.getElementById('callsign'); }
 function iconSquad(row){
   var bodyHtml = null;
   if(row.avatar_photo_url){
-    bodyHtml = '<div class="pin-3d pin-photo pin-squad-3d" style="background-image:url(\'' + row.avatar_photo_url + '\')"></div>';
+    bodyHtml = '<div class="pin-3d pin-photo pin-squad-3d" style="background-image:url(\'' + cssUrl(row.avatar_photo_url) + '\')"></div>';
   } else if(row.avatar_emoji){
     var chosen = YOU_ICONS.find(function(o){ return o.id === row.avatar_emoji; });
     if(chosen && chosen.glyph) bodyHtml = '<div class="pin-3d pin-squad-3d">' + chosen.glyph + '</div>';
   }
   if(!bodyHtml) return icon('pin-squad', row.name);
   return L.divIcon({
-    className:'', html:'<div style="display:flex;align-items:center">' + bodyHtml + '<div class="pin-label">' + row.name + '</div></div>',
+    className:'', html:'<div style="display:flex;align-items:center">' + bodyHtml + '<div class="pin-label">' + esc(row.name) + '</div></div>',
     iconSize:[32,32], iconAnchor:[16,16]
   });
 }
@@ -800,9 +951,11 @@ function setHeading(deg){
   var raw = ((deg % 360) + 360) % 360;
   youHeading = raw;
   if(!youConeEl) refreshYouConeRef(); else applyHeading();
-  var btn = document.getElementById('compass-btn');
-  if(btn.classList.contains('on')) btn.textContent = Math.round(raw) + '° [' + (window.__debugAngle||'') + ']';
+  if(view3d) apply3dHeading();
+  var shown = Math.round(raw) % 360;
+  if(shown !== lastHeadingShown && compassBtn.classList.contains('on')){ lastHeadingShown = shown; compassBtn.textContent = shown + '°'; }
 }
+var compassBtn = document.getElementById('compass-btn'), lastHeadingShown = -1;
 
 var youMarker = L.marker([you.lat, you.lng], { icon: iconYou(callsignEl().value) }).addTo(map);
 refreshYouConeRef();
@@ -837,11 +990,11 @@ function updateTrack(){
     var diff = Math.round(targetAlt - you.alt);
     altStr = ' · ' + (diff > 0 ? '⬆' : (diff < 0 ? '⬇' : '⛰')) + Math.abs(diff) + 'm';
   }
-  chip.innerHTML = '📐 Rastreando <b>' + targetLabel(trackTarget) + '</b> — ' + db.dist + ' m · ' + db.brng + '°' + altStr + '<button id="track-style-btn" title="Cor e espessura">🎨</button><button id="track-stop">✕</button>';
+  document.getElementById('track-text').innerHTML = '📐 Rastreando <b>' + esc(targetLabel(trackTarget)) + '</b> — ' + db.dist + ' m · ' + db.brng + '°' + altStr;
   chip.style.display = 'flex';
-  document.getElementById('track-stop').addEventListener('click', clearTrack);
-  document.getElementById('track-style-btn').addEventListener('click', openTrackStyleModal);
 }
+document.getElementById('track-stop').addEventListener('click', function(){ clearTrack(); });
+document.getElementById('track-style-btn').addEventListener('click', function(){ openTrackStyleModal(); });
 function setTrack(id, group){
   if(trackTarget && trackTarget.id === id && trackTarget.group === group){ clearTrack(); return; }
   trackTarget = { id:id, group:group };
@@ -896,7 +1049,7 @@ var waypointMarkers = {};
 // ---------- ícone do jogador ----------
 function updateYouIconBtn(){
   if(youPhotoUrl){
-    document.getElementById('you-icon-btn').innerHTML = '<div class="pin-3d pin-photo" style="width:28px;height:28px;background-image:url(\'' + youPhotoUrl + '\')"></div>';
+    document.getElementById('you-icon-btn').innerHTML = '<div class="pin-3d pin-photo" style="width:28px;height:28px;background-image:url(\'' + cssUrl(youPhotoUrl) + '\')"></div>';
     return;
   }
   var chosen = YOU_ICONS.find(function(o){ return o.id === youIconId; }) || YOU_ICONS[0];
@@ -1139,7 +1292,7 @@ function renderHistory(){
         }
         scores.forEach(function(s){
           var row = document.createElement('div'); row.className = 'lb-row' + (s.player_id === myId ? ' me' : '');
-          row.innerHTML = '<div class="lb-name">' + s.player_name + '</div><div class="lb-num">' + s.kills + ' K</div><div class="lb-num">' + s.deaths + ' D</div><div class="lb-num">' + computeKD(s.kills, s.deaths) + '</div>';
+          row.innerHTML = '<div class="lb-name">' + esc(s.player_name) + '</div><div class="lb-num">' + (+s.kills || 0) + ' K</div><div class="lb-num">' + (+s.deaths || 0) + ' D</div><div class="lb-num">' + computeKD(s.kills, s.deaths) + '</div>';
           box.appendChild(row);
         });
         list.appendChild(box);
@@ -1156,14 +1309,15 @@ addPointBtn.addEventListener('click', function(){
   document.getElementById('map').classList.toggle('placing', placing);
   document.getElementById('maphint').classList.toggle('show', placing);
 });
-map.on('click', function(e){
+function handleMapClick(lat, lng){
   if(!placing) return;
   placing = false;
   addPointBtn.classList.remove('on');
   document.getElementById('map').classList.remove('placing');
   document.getElementById('maphint').classList.remove('show');
-  openWpModal(e.latlng.lat, e.latlng.lng, 'PT-' + (Object.keys(waypoints).length + 1));
-});
+  openWpModal(lat, lng, 'PT-' + (Object.keys(waypoints).length + 1));
+}
+map.on('click', function(e){ handleMapClick(e.latlng.lat, e.latlng.lng); });
 
 // ---------- geolocalização real ----------
 if(navigator.geolocation){
@@ -1173,10 +1327,19 @@ if(navigator.geolocation){
     maybeFetchGroundElevation();
     youMarker.setLatLng([you.lat, you.lng]);
     if(!you._centered){ map.setView([you.lat, you.lng], 17); you._centered = true; }
-    if(activeTab==='squad') renderList();
+    scheduleSquadList();
     updateTrack();
     pushMyPosition();
   }, function(){ /* permissão negada: fica no centro padrão */ }, { enableHighAccuracy:true, maximumAge:2000 });
+}
+
+var squadListTimer = null;
+function scheduleSquadList(){
+  if(squadListTimer || activeTab !== 'squad') return;
+  squadListTimer = setTimeout(function(){
+    squadListTimer = null;
+    if(activeTab === 'squad' && !document.hidden && !document.body.classList.contains('immersive')) renderList();
+  }, 900);
 }
 
 // ---------- altitude em relação ao solo ----------
@@ -1196,7 +1359,7 @@ function maybeFetchGroundElevation(){
         you.groundElev = elev;
         you.agl = you.alt - elev;
         pushMyPosition(true);
-        if(activeTab === 'squad') renderList();
+        scheduleSquadList();
       }
     }).catch(function(){ /* serviço de elevação fora do ar, ignora e segue sem altura do solo */ });
 }
@@ -1218,7 +1381,9 @@ document.getElementById('kill-btn-float').addEventListener('click', function(){
     cx = r.left + r.width/2; cy = r.top + r.height/2;
     active = true;
     panInterval = setInterval(function(){
-      if(dx !== 0 || dy !== 0) map.panBy([dx * 0.6, dy * 0.6], { animate:false });
+      if(dx === 0 && dy === 0) return;
+      if(view3d && map3d) map3d.panBy([dx * 0.6, dy * 0.6], { duration:0 });
+      else map.panBy([dx * 0.6, dy * 0.6], { animate:false });
     }, 40);
   }
   function move(clientX, clientY){
@@ -1259,16 +1424,19 @@ function screenAngle(){
   if(typeof window.orientation === 'number') return window.orientation;
   return 0;
 }
+var headingPending = 0, headingRaf = 0, sawAbsolute = false;
 function handleOrientation(e){
+  // Android dispara os dois eventos; o "absolute" é o que aponta pro norte de verdade
+  if(e.type === 'deviceorientationabsolute') sawAbsolute = true;
+  else if(sawAbsolute && typeof e.webkitCompassHeading !== 'number') return;
   var rawSensor;
   if(typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)){
     rawSensor = e.webkitCompassHeading;
   } else if(e.alpha != null){
     rawSensor = 360 - e.alpha;
   } else { return; }
-  var ang = screenAngle();
-  window.__debugAngle = 'raw:' + Math.round(rawSensor) + ' scr:' + ang;
-  setHeading(rawSensor + ang);
+  headingPending = rawSensor + screenAngle();
+  if(!headingRaf) headingRaf = requestAnimationFrame(function(){ headingRaf = 0; setHeading(headingPending); });
 }
 document.getElementById('compass-btn').addEventListener('click', function(){
   var btn = this;
@@ -1282,8 +1450,125 @@ document.getElementById('compass-btn').addEventListener('click', function(){
   } else { start(); }
 });
 
+// ---------- visão 3D: satélite sobre o relevo real (MapLibre, carregado só quando usado) ----------
+var map3d = null, view3d = false, map3dLoading = false, markers3d = {}, sync3dTimer = null;
+var MAPLIBRE_URL = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl';
+function loadMapLibre(cb){
+  if(window.maplibregl){ cb(null); return; }
+  var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = MAPLIBRE_URL + '.css';
+  document.head.appendChild(css);
+  var sc = document.createElement('script'); sc.src = MAPLIBRE_URL + '.js';
+  sc.onload = function(){ cb(window.maplibregl ? null : new Error('maplibre')); };
+  sc.onerror = function(){ sc.remove(); cb(new Error('rede')); };
+  document.body.appendChild(sc);
+}
+function build3d(center, zoom){
+  map3d = new maplibregl.Map({
+    container:'map3d',
+    style:{
+      version:8,
+      sources:{
+        sat:{ type:'raster', tiles:[ESRI_SAT], tileSize:256, maxzoom:19, attribution:ESRI_ATTR },
+        roads:{ type:'raster', tiles:[ESRI_ROADS], tileSize:256, maxzoom:19 },
+        labels:{ type:'raster', tiles:[ESRI_LABELS], tileSize:256, maxzoom:19 },
+        dem:{ type:'raster-dem', tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+              encoding:'terrarium', tileSize:256, maxzoom:15, attribution:'Relevo: Mapzen / AWS Terrain Tiles' }
+      },
+      layers:[
+        { id:'sat', type:'raster', source:'sat' },
+        { id:'roads', type:'raster', source:'roads' },
+        { id:'labels', type:'raster', source:'labels' }
+      ]
+    },
+    center:[center.lng, center.lat], zoom:zoom, pitch:60, maxPitch:80, maxZoom:20
+  });
+  map3d.on('load', function(){
+    try{ map3d.setTerrain({ source:'dem', exaggeration:1.3 }); }catch(e){}
+    map3d.addSource('track', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+    map3d.addLayer({ id:'track', type:'line', source:'track', paint:{ 'line-color':trackColor, 'line-width':trackWeight, 'line-dasharray':[2.5, 2] } });
+    sync3d();
+  });
+  map3d.on('click', function(e){ handleMapClick(e.lngLat.lat, e.lngLat.lng); });
+  map3d.on('rotate', apply3dHeading);
+}
+function apply3dHeading(){
+  var m = markers3d.you;
+  if(!m || !map3d) return;
+  var dir = m.mk.getElement().querySelector('.dir');
+  if(dir) dir.style.transform = 'translate(-50%,-50%) rotate(' + (youHeading - map3d.getBearing()) + 'deg)';
+}
+function marker3dSet(key, lat, lng, html){
+  var m = markers3d[key];
+  if(!m){
+    var el = document.createElement('div'); el.className = 'm3d';
+    var off = html.indexOf('pin-3d') > -1 ? -16 : -13;
+    m = markers3d[key] = { html:null, mk:new maplibregl.Marker({ element:el, anchor:'top-left', offset:[off, off] }).setLngLat([lng, lat]).addTo(map3d) };
+  }
+  if(m.html !== html){ m.mk.getElement().innerHTML = html; m.html = html; }
+  m.mk.setLngLat([lng, lat]);
+  m.seen = true;
+}
+// espelha no 3D o que existe no mapa 2D: você, esquadrão, pontos visíveis e linha de rastreio
+function sync3d(){
+  if(!view3d || !map3d) return;
+  Object.keys(markers3d).forEach(function(k){ markers3d[k].seen = false; });
+  marker3dSet('you', you.lat, you.lng, iconYou(callsignEl().value || 'VOCÊ').options.html);
+  Object.keys(squad).forEach(function(id){ var p = squad[id]; marker3dSet('p' + id, p.lat, p.lng, iconSquad(p).options.html); });
+  Object.keys(waypoints).forEach(function(id){ if(isHidden(id)) return; var w = waypoints[id]; marker3dSet('w' + id, w.lat, w.lng, iconWay(w).options.html); });
+  Object.keys(markers3d).forEach(function(k){ if(!markers3d[k].seen){ markers3d[k].mk.remove(); delete markers3d[k]; } });
+  apply3dHeading();
+  var src = map3d.getSource && map3d.getSource('track');
+  if(src){
+    var tll = trackTarget ? targetLatLng(trackTarget) : null;
+    src.setData(tll ? { type:'Feature', properties:{}, geometry:{ type:'LineString', coordinates:[[you.lng, you.lat], [tll[1], tll[0]]] } }
+                    : { type:'FeatureCollection', features:[] });
+    map3d.setPaintProperty('track', 'line-color', trackColor);
+    map3d.setPaintProperty('track', 'line-width', trackWeight);
+  }
+}
+function exit3d(){
+  view3d = false;
+  clearInterval(sync3dTimer); sync3dTimer = null;
+  document.getElementById('map3d').style.display = 'none';
+  document.getElementById('map').style.visibility = '';
+  document.getElementById('view3d-btn').classList.remove('on');
+  if(map3d){
+    var c = map3d.getCenter();
+    map.setView([c.lat, c.lng], Math.min(21, Math.round(map3d.getZoom() + 1)), { animate:false });
+  }
+  map.invalidateSize();
+}
+function enter3d(){
+  if(map3dLoading) return;
+  map3dLoading = true;
+  mapToast('Carregando visão 3D…', 8000);
+  loadMapLibre(function(err){
+    map3dLoading = false;
+    if(err){ mapToast('Não consegui carregar o 3D. Verifique a conexão.', 3000); return; }
+    var c = map.getCenter(), z = Math.max(1, map.getZoom() - 1);
+    document.getElementById('map3d').style.display = 'block';
+    try{
+      if(!map3d) build3d(c, z);
+      else { map3d.resize(); map3d.jumpTo({ center:[c.lng, c.lat], zoom:z }); }
+    } catch(e){
+      map3d = null;
+      document.getElementById('map3d').style.display = 'none';
+      mapToast('Este aparelho não conseguiu abrir o mapa 3D.', 3000);
+      return;
+    }
+    view3d = true;
+    document.getElementById('map').style.visibility = 'hidden';
+    document.getElementById('view3d-btn').classList.add('on');
+    sync3d();
+    sync3dTimer = setInterval(sync3d, 1000);
+    mapToast('Visão 3D: arraste com dois dedos para inclinar e girar', 3200);
+  });
+}
+document.getElementById('view3d-btn').addEventListener('click', function(){ if(view3d) exit3d(); else enter3d(); });
+
 // ---------- me localizar ----------
 document.getElementById('locate-btn').addEventListener('click', function(){
+  if(view3d && map3d){ map3d.flyTo({ center:[you.lng, you.lat], zoom:Math.max(map3d.getZoom(), 16.5), duration:700 }); return; }
   map.flyTo([you.lat, you.lng], Math.max(map.getZoom(), 18), { duration:0.6 });
   var el = youMarker.getElement();
   var pinEl = el && (el.querySelector('.pin') || el.querySelector('.pin-3d'));
@@ -1388,9 +1673,6 @@ function renderList(){
     var importBtn = document.createElement('button'); importBtn.style.color = 'var(--text-secondary)'; importBtn.textContent = 'Importar KML';
     importBtn.addEventListener('click', function(){ document.getElementById('kml-input').click(); });
     tb.appendChild(importBtn);
-    var intelBtn = document.createElement('button'); intelBtn.id = 'intel-btn'; intelBtn.style.color = 'var(--you)'; intelBtn.textContent = '🤖 Ler documento (IA)';
-    intelBtn.addEventListener('click', function(){ document.getElementById('intel-input').click(); });
-    tb.appendChild(intelBtn);
     list.appendChild(tb);
     if(wids.length===0){
       var emptyMsg = document.createElement('div'); emptyMsg.className = 'empty';
@@ -1406,6 +1688,7 @@ function renderList(){
   }
 }
 function focusOn(lat, lng, id, group){
+  if(view3d && map3d){ map3d.flyTo({ center:[lng, lat], zoom:Math.max(map3d.getZoom(), 16.5), duration:700 }); return; }
   map.flyTo([lat, lng], Math.max(map.getZoom(), 18), { duration:0.6 });
   var marker = group==='squad' ? squadMarkers[id] : waypointMarkers[id];
   if(marker){
@@ -1419,7 +1702,7 @@ function youAltRow(){
   var sw = document.createElement('div'); sw.className = 'swatch'; sw.style.background = 'var(--you)';
   var main = document.createElement('div'); main.className = 'row-main';
   var altInfo = fmtAlt(you.alt, you.agl);
-  main.innerHTML = '<div class="row-name">' + (callsignEl().value || 'VOCÊ') + ' (você)</div><div class="row-coord">' + fmtCoord(you.lat, you.lng) + (altInfo || ' · altitude indisponível') + '</div>';
+  main.innerHTML = '<div class="row-name">' + esc(callsignEl().value || 'VOCÊ') + ' (você)</div><div class="row-coord">' + fmtCoord(you.lat, you.lng) + (altInfo || ' · altitude indisponível') + '</div>';
   row.appendChild(sw); row.appendChild(main);
   return row;
 }
@@ -1429,7 +1712,7 @@ function rowEl(name, coord, distStr, brngStr, lat, lng, id, group, deletable, co
   var sw = document.createElement('div'); sw.className='swatch';
   sw.style.background = color;
   var main = document.createElement('div'); main.className='row-main';
-  main.innerHTML = '<div class="row-name">'+name+'</div><div class="row-coord">'+coord+'</div>';
+  main.innerHTML = '<div class="row-name">'+esc(name)+'</div><div class="row-coord">'+esc(coord)+'</div>';
   var meta = document.createElement('div'); meta.className='row-meta';
   meta.innerHTML = '<b>'+distStr+'</b>'+brngStr;
   row.appendChild(sw); row.appendChild(main); row.appendChild(meta);
@@ -1500,12 +1783,21 @@ document.getElementById('wp-confirm').addEventListener('click', function(){
 
 // ---------- comunicação ----------
 function addMessage(opts){
-  messages.push({
+  // o mesmo id pode chegar duas vezes (carga inicial + tempo real, ou ao trocar de convidado pra conta)
+  if(opts.id != null && messages.some(function(x){ return x.id === opts.id; })) return;
+  var m = {
     id: opts.id || null, sender: opts.sender, text: opts.text || null, audio: opts.audio || null,
     image: opts.image || null, isMe: !!opts.isMe, kind: opts.kind || 'chat',
     audioPath: opts.audioPath || null, imagePath: opts.imagePath || null
-  });
-  if(activeTab==='comms') renderChat();
+  };
+  messages.push(m);
+  if(messages.length > 200) messages.splice(0, messages.length - 200);
+  if(activeTab==='comms'){
+    // só acrescenta a mensagem nova: não recria a conversa nem interrompe áudio tocando
+    var log = document.getElementById('chat-log');
+    log.appendChild(msgNode(m));
+    log.scrollTop = log.scrollHeight;
+  }
   else if(!opts.isMe){
     var t = document.querySelector('.tab[data-tab="comms"]');
     if(t) t.classList.add('has-unread');
@@ -1528,7 +1820,8 @@ document.getElementById('photo-viewer-close').addEventListener('click', function
 });
 function deleteMessageLocal(id){
   messages = messages.filter(function(m){ return m.id !== id; });
-  renderChat();
+  var nodes = document.getElementById('chat-log').children;
+  for(var i = nodes.length - 1; i >= 0; i--){ if(nodes[i].dataset.mid === String(id)) nodes[i].remove(); }
 }
 function deleteMessage(m){
   if(!confirm('Excluir essa mensagem pra todo mundo da party?')) return;
@@ -1538,40 +1831,45 @@ function deleteMessage(m){
   if(m.audioPath) sb.storage.from('audio').remove([m.audioPath]).then(function(){});
   if(m.imagePath) sb.storage.from('photos').remove([m.imagePath]).then(function(){});
 }
+function msgNode(m){
+  var isCall = m.kind === 'call-voice' || m.kind === 'call-video';
+  var special = m.kind === 'kia' || m.kind === 'alert' || isCall;
+  var b = document.createElement('div'); b.className = 'msg ' + (special ? '' : (m.isMe ? 'msg-me' : 'msg-them'));
+  if(m.id != null) b.dataset.mid = String(m.id);
+  if(special){
+    b.style.alignSelf = 'center'; b.style.maxWidth = '92%';
+    b.style.background = m.kind==='kia' ? 'rgba(217,85,63,.18)' : (isCall ? 'rgba(91,184,232,.18)' : 'rgba(232,162,61,.18)');
+    b.style.border = '0.5px solid ' + (m.kind==='kia' ? 'var(--danger)' : (isCall ? 'var(--you)' : 'var(--squad)'));
+  }
+  var html = '<div class="msg-sender">' + esc(m.sender) + '</div>';
+  if(m.text) html += '<div>' + esc(m.text) + '</div>';
+  if(m.audio) html += '<audio controls preload="none" src="' + esc(m.audio.url) + '"></audio>';
+  b.innerHTML = html;
+  if(isCall){
+    var joinBtn = document.createElement('button');
+    joinBtn.textContent = m.kind === 'call-voice' ? '🎙️ Entrar na chamada' : '🎥 Entrar na chamada';
+    joinBtn.style.cssText = 'display:block; margin-top:6px; width:100%; padding:8px; border-radius:8px; background:var(--you); color:#062033; border:none; font-family:var(--sans); font-size:12px; font-weight:600;';
+    joinBtn.addEventListener('click', function(){ joinCallRoom(callRoomIdParty(), m.kind !== 'call-voice'); });
+    b.appendChild(joinBtn);
+  }
+  if(m.image){
+    var img = document.createElement('img'); img.loading = 'lazy'; img.decoding = 'async'; img.src = m.image.url;
+    img.addEventListener('click', function(){ openPhotoViewer(m.image.url); });
+    b.appendChild(img);
+  }
+  if(m.isMe && m.id){
+    var del = document.createElement('button'); del.className = 'msg-del'; del.textContent = '✕';
+    del.addEventListener('click', function(){ deleteMessage(m); });
+    b.appendChild(del);
+  }
+  return b;
+}
 function renderChat(){
   var log = document.getElementById('chat-log');
+  var frag = document.createDocumentFragment();
+  messages.forEach(function(m){ frag.appendChild(msgNode(m)); });
   log.innerHTML = '';
-  messages.forEach(function(m){
-    var special = m.kind === 'kia' || m.kind === 'alert' || m.kind === 'call-voice' || m.kind === 'call-video';
-    var b = document.createElement('div'); b.className = 'msg ' + (special ? '' : (m.isMe ? 'msg-me' : 'msg-them'));
-    if(special){
-      b.style.alignSelf = 'center'; b.style.maxWidth = '92%';
-      b.style.background = m.kind==='kia' ? 'rgba(217,85,63,.18)' : (m.kind==='call-voice' || m.kind==='call-video' ? 'rgba(91,184,232,.18)' : 'rgba(232,162,61,.18)');
-      b.style.border = '0.5px solid ' + (m.kind==='kia' ? 'var(--danger)' : (m.kind==='call-voice' || m.kind==='call-video' ? 'var(--you)' : 'var(--squad)'));
-    }
-    var html = '<div class="msg-sender">' + m.sender + '</div>';
-    if(m.text) html += '<div>' + m.text + '</div>';
-    if(m.audio) html += '<audio controls src="' + m.audio.url + '"></audio>';
-    b.innerHTML = html;
-    if(m.kind === 'call-voice' || m.kind === 'call-video'){
-      var joinBtn = document.createElement('button');
-      joinBtn.textContent = m.kind === 'call-voice' ? '🎙️ Entrar na chamada' : '🎥 Entrar na chamada';
-      joinBtn.style.cssText = 'display:block; margin-top:6px; width:100%; padding:8px; border-radius:8px; background:var(--you); color:#062033; border:none; font-family:var(--sans); font-size:12px; font-weight:600;';
-      joinBtn.addEventListener('click', function(){ joinCallRoom(callRoomIdParty(), m.kind !== 'call-voice'); });
-      b.appendChild(joinBtn);
-    }
-    if(m.image){
-      var img = document.createElement('img'); img.src = m.image.url;
-      img.addEventListener('click', function(){ openPhotoViewer(m.image.url); });
-      b.appendChild(img);
-    }
-    if(m.isMe && m.id){
-      var del = document.createElement('button'); del.className = 'msg-del'; del.textContent = '✕';
-      del.addEventListener('click', function(){ deleteMessage(m); });
-      b.appendChild(del);
-    }
-    log.appendChild(b);
-  });
+  log.appendChild(frag);
   log.scrollTop = log.scrollHeight;
 }
 document.getElementById('chat-send').addEventListener('click', sendChat);
@@ -1870,14 +2168,14 @@ function renderParty(){
   var list = document.getElementById('party-list');
   list.innerHTML = '';
   var mine = document.createElement('div'); mine.className='row'; mine.style.cursor='default';
-  mine.innerHTML = '<div class="swatch" style="background:var(--you)"></div><div class="row-main"><div class="row-name">'+(callsignEl().value||'VOCÊ')+' (você)</div></div>';
+  mine.innerHTML = '<div class="swatch" style="background:var(--you)"></div><div class="row-main"><div class="row-name">'+esc(callsignEl().value||'VOCÊ')+' (você)</div></div>';
   var mtag = document.createElement('span'); mtag.className='status-tag status-conectado'; mtag.textContent='Conectado';
   mine.appendChild(mtag); list.appendChild(mine);
 
   Object.keys(squad).forEach(function(id){
     var s = squad[id];
     var row = document.createElement('div'); row.className='row'; row.style.cursor='default';
-    row.innerHTML = '<div class="swatch" style="background:var(--squad)"></div><div class="row-main"><div class="row-name">'+s.name+'</div></div>';
+    row.innerHTML = '<div class="swatch" style="background:var(--squad)"></div><div class="row-main"><div class="row-name">'+esc(s.name)+'</div></div>';
     var tag = document.createElement('span'); tag.className='status-tag status-conectado'; tag.textContent='Conectado';
     row.appendChild(tag); list.appendChild(row);
   });
@@ -1894,7 +2192,7 @@ function renderParty(){
     var row2 = document.createElement('div'); row2.className = 'row'; row2.style.cursor = 'default';
     var sw2 = document.createElement('div'); sw2.className = 'swatch'; sw2.style.background = 'var(--ok)';
     var main2 = document.createElement('div'); main2.className = 'row-main';
-    main2.innerHTML = '<div class="row-name">' + (f.callsign || '...') + '</div><div class="row-coord">Online</div>';
+    main2.innerHTML = '<div class="row-name">' + esc(f.callsign || '...') + '</div><div class="row-coord">Online</div>';
     row2.appendChild(sw2); row2.appendChild(main2);
     var inv2 = document.createElement('button'); inv2.className = 'row-del'; inv2.style.width = 'auto'; inv2.style.padding = '0 10px'; inv2.style.color = 'var(--you)';
     inv2.textContent = 'Convidar';
@@ -1947,7 +2245,8 @@ function upsertSquadMember(row){
   }
   document.getElementById('status-text').textContent = (Object.keys(squad).length) + ' na malha';
   if(trackTarget && trackTarget.group==='squad' && trackTarget.id===row.id) updateTrack();
-  if(activeTab==='squad' || activeTab==='party') renderList();
+  if(!prev || prev.name !== row.name){ if(activeTab==='squad' || activeTab==='party') renderList(); }
+  else scheduleSquadList();
 }
 function removeSquadMember(id){
   if(trackTarget && trackTarget.group==='squad' && trackTarget.id===id) clearTrack();
@@ -2044,52 +2343,17 @@ document.getElementById('kml-input').addEventListener('change', function(e){
   this.value = '';
 });
 
-// ---------- leitura de documento de inteligência via IA ----------
-var INTEL_FN_URL = 'https://oxakoccszlcdxayiuhun.supabase.co/functions/v1/parse-intel';
-document.getElementById('intel-input').addEventListener('change', function(e){
-  var f = e.target.files && e.target.files[0];
-  this.value = '';
-  if(f) importIntelDoc(f);
-});
-function importIntelDoc(file){
-  var btn = document.getElementById('intel-btn');
-  var reader = new FileReader();
-  reader.onload = function(ev){
-    var base64 = ev.target.result.split(',')[1];
-    var original = btn.textContent;
-    btn.textContent = '🤖 Analisando...'; btn.disabled = true;
-    fetch(INTEL_FN_URL, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ mimeType: file.type || 'application/pdf', data: base64 })
-    }).then(function(r){ return r.json(); }).then(function(res){
-      btn.textContent = original; btn.disabled = false;
-      if(res.error){ alert('A IA não conseguiu ler esse documento: ' + res.error); return; }
-      var count = 0;
-      (res.pontos || []).forEach(function(p){
-        if(!p.mgrs) return;
-        try{
-          var ll = fromMGRS(p.mgrs);
-          commitWaypoint(ll.lat, ll.lng, p.nome || ('PT-' + (Object.keys(waypoints).length + 1)), '📄', '#5BB8E8');
-          count++;
-        } catch(err){ /* coordenada MGRS invalida, pula */ }
-      });
-      switchTab('points');
-      alert((res.resumo || 'Documento lido, sem resumo disponível.') + '\n\n' + count + ' ponto(s) MGRS plotado(s) automaticamente.');
-    }).catch(function(err){
-      btn.textContent = original; btn.disabled = false;
-      alert('Falha ao conectar com a IA: ' + err.message);
-    });
-  };
-  reader.readAsDataURL(file);
-}
-
-var lastPush = 0;
+var lastPush = 0, lastPushedLat = null, lastPushedLng = null;
 function pushMyPosition(force){
   if(!sb || !authResolved) return;
   var now = Date.now();
-  if(!force && now - lastPush < 2500) return;
-  lastPush = now;
+  if(!force){
+    if(now - lastPush < 2500) return;
+    // parado (menos de ~2 m): basta um sinal de vida a cada 10 s em vez de um envio a cada 3 s
+    if(lastPushedLat !== null && now - lastPush < 10000 &&
+       Math.abs(you.lat - lastPushedLat) < 0.00002 && Math.abs(you.lng - lastPushedLng) < 0.00002) return;
+  }
+  lastPush = now; lastPushedLat = you.lat; lastPushedLng = you.lng;
   sb.from('players').upsert({
     id:myId, party_code:partyCode, name: callsignEl().value || 'VOCÊ',
     lat:you.lat, lng:you.lng, heading:youHeading, altitude:you.alt, agl:you.agl,
@@ -2130,8 +2394,8 @@ function loadPartyData(){
   sb.from('waypoints').select('*').eq('party_code', partyCode).then(function(res){
     (res.data || []).forEach(upsertWaypointRow);
   });
-  sb.from('messages').select('*').eq('party_code', partyCode).order('created_at', { ascending:true }).limit(50).then(function(res){
-    (res.data || []).forEach(function(m){
+  sb.from('messages').select('*').eq('party_code', partyCode).order('created_at', { ascending:false }).limit(50).then(function(res){
+    (res.data || []).reverse().forEach(function(m){
       addMessage({
         id:m.id, sender:m.sender, text:m.body,
         audio: m.audio_url ? { url:m.audio_url } : null,
@@ -2203,7 +2467,7 @@ setInterval(function(){
 }, 10000);
 
 // rede de segurança: mantém a aba Party sempre fiel ao estado real do esquadrão
-setInterval(function(){ if(activeTab === 'party') renderParty(); }, 4000);
+setInterval(function(){ if(activeTab === 'party' && !document.hidden) renderParty(); }, 4000);
 
 function startPartySync(){
   if(sb){
@@ -2227,62 +2491,182 @@ var incomingRequests = {};
 var onlineFriends = {};
 var presenceChannel = null, friendsChannel = null, invitesChannel = null;
 
-function showAuthGate(){ document.getElementById('auth-gate').style.display = 'flex'; }
-function hideAuthGate(){ document.getElementById('auth-gate').style.display = 'none'; }
+function authEl(id){ return document.getElementById(id); }
+function showAuthGate(){
+  authEl('auth-skip').textContent = authResolved ? 'Voltar ao mapa' : 'Continuar sem conta';
+  authEl('auth-gate').style.display = 'flex';
+}
+function hideAuthGate(){ authEl('auth-gate').style.display = 'none'; }
 
-var authMode = 'login';
-document.querySelectorAll('#auth-tabs .tab').forEach(function(t){
-  t.addEventListener('click', function(){
-    authMode = t.dataset.mode;
-    document.querySelectorAll('#auth-tabs .tab').forEach(function(x){ x.classList.toggle('active', x===t); });
-    document.getElementById('auth-callsign').style.display = authMode==='signup' ? 'block' : 'none';
-    document.getElementById('auth-submit').textContent = authMode==='signup' ? 'Criar conta' : 'Entrar';
-    document.getElementById('auth-error').textContent = '';
-  });
-});
-document.getElementById('auth-submit').addEventListener('click', function(){
-  if(!sb) return;
-  var email = document.getElementById('auth-email').value.trim();
-  var pass = document.getElementById('auth-password').value;
-  var cs = document.getElementById('auth-callsign').value.trim();
-  var errEl = document.getElementById('auth-error');
-  errEl.textContent = '';
-  if(!email || !pass){ errEl.textContent = 'Preencha e-mail e senha.'; return; }
-  if(authMode === 'signup'){
-    if(!cs){ errEl.textContent = 'Escolha um nome de operador.'; return; }
-    sb.auth.signUp({ email:email, password:pass, options:{ data:{ callsign:cs } } }).then(function(res){
-      if(res.error){ errEl.textContent = res.error.message; return; }
+var authMode = 'login', authBusy = false, pendingRecovery = false;
+var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+var APP_URL = /^https?:$/.test(location.protocol) ? (location.origin + location.pathname) : null;
+
+function authMsg(text, ok){
+  var el = authEl('auth-error');
+  el.textContent = text || '';
+  el.classList.toggle('ok', !!ok);
+}
+var authWatchdog = null;
+function setAuthBusy(busy, label){
+  // sinal fraco em campo: não deixa o botão preso em "Criando conta…" pra sempre
+  clearTimeout(authWatchdog);
+  if(busy) authWatchdog = setTimeout(function(){ authFail('A conexão está muito lenta. Tente de novo em um lugar com sinal melhor.'); }, 20000);
+  authBusy = busy;
+  var btn = authEl('auth-submit');
+  btn.disabled = busy;
+  btn.textContent = busy ? label : (authMode === 'signup' ? 'Criar conta' : 'Entrar');
+}
+function authFail(text, focusId){
+  setAuthBusy(false);
+  authMsg(text);
+  if(focusId) authEl(focusId).focus();
+}
+function setAuthMode(mode){
+  authMode = mode;
+  var signup = mode === 'signup';
+  document.querySelectorAll('#auth-tabs .tab').forEach(function(x){ x.classList.toggle('active', x.dataset.mode === mode); });
+  authEl('auth-callsign-wrap').style.display = signup ? 'block' : 'none';
+  authEl('auth-password').autocomplete = signup ? 'new-password' : 'current-password';
+  authEl('auth-password').placeholder = signup ? 'Mínimo 6 caracteres' : 'Sua senha';
+  authEl('auth-submit').textContent = signup ? 'Criar conta' : 'Entrar';
+  authEl('auth-forgot').style.display = signup ? 'none' : 'block';
+  authEl('auth-sub').textContent = signup ? 'Só precisa de nome de operador, e-mail e senha.' : 'Entre para sincronizar com seu esquadrão.';
+  authMsg('');
+}
+// mensagens do servidor chegam em inglês: traduz as mais comuns
+function authErrorPt(err){
+  var raw = (err && err.message) || '';
+  var m = raw.toLowerCase();
+  if(m.indexOf('invalid login credentials') > -1) return 'E-mail ou senha incorretos.';
+  if(m.indexOf('already registered') > -1 || m.indexOf('already been registered') > -1) return 'Esse e-mail já tem conta. Toque em Entrar.';
+  if(m.indexOf('email not confirmed') > -1) return 'Falta confirmar seu e-mail. Abra o link que enviamos e tente de novo.';
+  if(m.indexOf('password should be') > -1 || m.indexOf('weak') > -1) return 'Senha fraca: use pelo menos 6 caracteres.';
+  if(m.indexOf('rate limit') > -1 || m.indexOf('security purposes') > -1 || m.indexOf('too many') > -1) return 'Muitas tentativas seguidas. Espere um minuto e tente de novo.';
+  if(m.indexOf('signups not allowed') > -1 || m.indexOf('signup is disabled') > -1) return 'O cadastro está desativado no momento.';
+  if(m.indexOf('email') > -1 && m.indexOf('invalid') > -1) return 'Esse e-mail não é válido.';
+  if(m.indexOf('failed to fetch') > -1 || m.indexOf('load failed') > -1 || m.indexOf('network') > -1) return 'Sem conexão. Verifique a internet e tente de novo.';
+  return raw || 'Algo deu errado, tente de novo.';
+}
+// avisa antes de criar a conta se o nome de operador já existe (a busca de amigos é por nome)
+function callsignIsFree(cs){
+  var pattern = cs.replace(/[\\%_]/g, '\\$&');
+  return sb.from('profiles').select('id').ilike('callsign', pattern).limit(1).then(function(res){
+    return res.error ? true : !(res.data && res.data.length);
+  }, function(){ return true; });
+}
+function doSignup(email, pass, cs){
+  setAuthBusy(true, 'Criando conta…');
+  callsignIsFree(cs).then(function(free){
+    if(!free){ authFail('Esse nome de operador já está em uso. Escolha outro.', 'auth-callsign'); return; }
+    var options = { data:{ callsign:cs } };
+    if(APP_URL) options.emailRedirectTo = APP_URL;
+    return sb.auth.signUp({ email:email, password:pass, options:options }).then(function(res){
+      if(res.error){ authFail(authErrorPt(res.error)); return; }
       var user = res.data && res.data.user;
-      if(!user){ errEl.textContent = 'Algo deu errado, tente de novo.'; return; }
-      sb.from('profiles').upsert({ id:user.id, callsign:cs }).then(function(){
-        if(res.data.session) onAuthSuccess(res.data.session, { id:user.id, callsign:cs });
-        else errEl.textContent = 'Conta criada! Confirme seu e-mail e depois toque em Entrar.';
-      });
+      if(!user){ authFail('Algo deu errado, tente de novo.'); return; }
+      // com confirmação por e-mail ligada, um e-mail já cadastrado volta sem "identities"
+      if(user.identities && user.identities.length === 0){
+        setAuthMode('login'); setAuthBusy(false);
+        authMsg('Esse e-mail já tem conta. Entre com sua senha ou toque em "Esqueci minha senha".');
+        return;
+      }
+      if(res.data.session){
+        var profile = { id:user.id, callsign:cs };
+        return sb.from('profiles').upsert(profile).then(function(){ onAuthSuccess(res.data.session, profile); });
+      }
+      // sem sessão = falta confirmar o e-mail; o perfil é criado no primeiro login a partir do nome escolhido
+      setAuthMode('login'); setAuthBusy(false);
+      authEl('auth-password').value = '';
+      authMsg('Conta criada! Abra o link que enviamos para ' + email + ' e depois toque em Entrar.', true);
     });
-  } else {
-    sb.auth.signInWithPassword({ email:email, password:pass }).then(function(res){
-      if(res.error){ errEl.textContent = res.error.message; return; }
-      loadProfileAndEnter(res.data.session);
-    });
-  }
+  }).catch(function(err){ authFail(authErrorPt(err)); });
+}
+function doLogin(email, pass){
+  setAuthBusy(true, 'Entrando…');
+  sb.auth.signInWithPassword({ email:email, password:pass }).then(function(res){
+    if(res.error){ authFail(authErrorPt(res.error)); return; }
+    loadProfileAndEnter(res.data.session);
+  }).catch(function(err){ authFail(authErrorPt(err)); });
+}
+document.querySelectorAll('#auth-tabs .tab').forEach(function(t){
+  t.addEventListener('click', function(){ if(!authBusy) setAuthMode(t.dataset.mode); });
 });
-document.getElementById('auth-skip').addEventListener('click', function(){
+authEl('auth-form').addEventListener('submit', function(e){
+  e.preventDefault();
+  if(authBusy) return;
+  if(!sb){ authMsg('Sem conexão com o servidor. Verifique a internet e recarregue o app.'); return; }
+  var signup = authMode === 'signup';
+  var email = authEl('auth-email').value.trim().toLowerCase();
+  var pass = authEl('auth-password').value;
+  var cs = authEl('auth-callsign').value.trim().replace(/\s+/g, ' ');
+  authMsg('');
+  if(signup && cs.length < 2){ authFail('Escolha um nome de operador (2 a 12 caracteres).', 'auth-callsign'); return; }
+  if(!EMAIL_RE.test(email)){ authFail('Digite um e-mail válido.', 'auth-email'); return; }
+  if(!pass){ authFail('Digite sua senha.', 'auth-password'); return; }
+  if(signup && pass.length < 6){ authFail('A senha precisa ter pelo menos 6 caracteres.', 'auth-password'); return; }
+  if(signup) doSignup(email, pass, cs); else doLogin(email, pass);
+});
+authEl('auth-pass-toggle').addEventListener('click', function(){
+  var p = authEl('auth-password');
+  var show = p.type === 'password';
+  p.type = show ? 'text' : 'password';
+  this.textContent = show ? '🙈' : '👁';
+  this.setAttribute('aria-label', show ? 'Esconder senha' : 'Mostrar senha');
+});
+authEl('auth-forgot').addEventListener('click', function(){
+  if(authBusy || !sb) return;
+  var email = authEl('auth-email').value.trim().toLowerCase();
+  if(!EMAIL_RE.test(email)){ authFail('Digite seu e-mail acima para receber o link de nova senha.', 'auth-email'); return; }
+  setAuthBusy(true, 'Enviando…');
+  sb.auth.resetPasswordForEmail(email, APP_URL ? { redirectTo:APP_URL } : undefined).then(function(res){
+    setAuthBusy(false);
+    if(res.error){ authMsg(authErrorPt(res.error)); return; }
+    authMsg('Enviamos um link para ' + email + '. Abra-o neste aparelho para definir a nova senha.', true);
+  }).catch(function(err){ authFail(authErrorPt(err)); });
+});
+authEl('auth-skip').addEventListener('click', function(){
+  hideAuthGate();
+  if(authResolved) return; // já estava no mapa (convidado abrindo a tela de login): só fecha
   guestMode = true;
   localStorage.setItem('gridsix-guest', '1');
-  hideAuthGate();
   authResolved = true;
   startPartySync();
 });
+// quem volta pelo link de "esqueci minha senha" cai direto na troca de senha
+function showRecovery(){
+  pendingRecovery = false;
+  openAccountModal();
+  var err = authEl('acct-error'); err.style.color = 'var(--squad)'; err.textContent = 'Defina sua nova senha abaixo.';
+  authEl('acct-pass1').focus();
+}
+if(sb) sb.auth.onAuthStateChange(function(ev){
+  if(ev !== 'PASSWORD_RECOVERY') return;
+  pendingRecovery = true;
+  if(session) setTimeout(showRecovery, 0);
+});
 
 function loadProfileAndEnter(sess){
-  sb.from('profiles').select('*').eq('id', sess.user.id).single().then(function(res){
-    onAuthSuccess(sess, res.data || { id:sess.user.id, callsign: callsignEl().value || 'VOCÊ' });
-  });
+  var meta = (sess.user && sess.user.user_metadata) || {};
+  var local = callsignEl().value || 'VOCÊ';
+  sb.from('profiles').select('*').eq('id', sess.user.id).maybeSingle().then(function(res){
+    if(res.data){ onAuthSuccess(sess, res.data); return; }
+    if(res.error){ onAuthSuccess(sess, { id:sess.user.id, callsign:local }); return; }
+    // primeira entrada depois de confirmar o e-mail: cria o perfil com o nome escolhido no cadastro
+    var profile = { id:sess.user.id, callsign: meta.callsign || local };
+    sb.from('profiles').upsert(profile).then(function(){}, function(){});
+    onAuthSuccess(sess, profile);
+  }, function(){ onAuthSuccess(sess, { id:sess.user.id, callsign:local }); });
 }
 function onAuthSuccess(sess, profile){
   session = sess; myProfile = profile;
+  // quem jogava como convidado e entrou numa conta: apaga o marcador antigo pra não virar "fantasma" no mapa
+  if(myId !== profile.id && authResolved) sb.from('players').delete().eq('id', myId).then(function(){}, function(){});
   myId = profile.id;
   localStorage.setItem('gridsix-player-id', myId);
+  setAuthBusy(false);
+  authEl('auth-password').value = '';
+  authMsg('');
   guestMode = false;
   localStorage.removeItem('gridsix-guest');
   authResolved = true;
@@ -2299,6 +2683,7 @@ function onAuthSuccess(sess, profile){
   loadFriends();
   subscribeFriends();
   subscribeInvites();
+  if(pendingRecovery) setTimeout(showRecovery, 0);
 }
 function renderAccountFooter(){
   var el = document.getElementById('account-footer');
@@ -2380,7 +2765,7 @@ function searchFriend(){
   sb.from('profiles').select('*').ilike('callsign', '%' + q + '%').neq('id', session.user.id).limit(6).then(function(res){
     (res.data || []).forEach(function(p){
       var row = document.createElement('div'); row.className = 'row'; row.style.cursor = 'default';
-      row.innerHTML = '<div class="row-main"><div class="row-name">' + p.callsign + '</div></div>';
+      row.innerHTML = '<div class="row-main"><div class="row-name">' + esc(p.callsign) + '</div></div>';
       var already = friends[p.id];
       var btn = document.createElement('button'); btn.className = 'row-del'; btn.style.width = 'auto'; btn.style.padding = '0 10px';
       btn.textContent = already ? 'Amigo' : '+ Adicionar';
@@ -2430,7 +2815,7 @@ function renderFriends(){
     reqIds.forEach(function(rid){
       var r = incomingRequests[rid];
       var row = document.createElement('div'); row.className = 'row'; row.style.cursor = 'default';
-      row.innerHTML = '<div class="row-main"><div class="row-name">' + (r.callsign || '...') + '</div></div>';
+      row.innerHTML = '<div class="row-main"><div class="row-name">' + esc(r.callsign || '...') + '</div></div>';
       var accept = document.createElement('button'); accept.className = 'row-del'; accept.textContent = '✓'; accept.style.color = 'var(--ok)';
       accept.addEventListener('click', function(){ respondRequest(rid, true); });
       var decline = document.createElement('button'); decline.className = 'row-del'; decline.style.marginLeft = '6px'; decline.textContent = '✕';
@@ -2452,7 +2837,7 @@ function renderFriends(){
     var row = document.createElement('div'); row.className = 'row'; row.style.cursor = 'default';
     var sw = document.createElement('div'); sw.className = 'swatch'; sw.style.background = online ? 'var(--ok)' : 'var(--text-muted)';
     var main = document.createElement('div'); main.className = 'row-main';
-    main.innerHTML = '<div class="row-name">' + (f.callsign || '...') + '</div><div class="row-coord">' + (online ? 'Online' : 'Offline') + '</div>';
+    main.innerHTML = '<div class="row-name">' + esc(f.callsign || '...') + '</div><div class="row-coord">' + (online ? 'Online' : 'Offline') + '</div>';
     row.appendChild(sw); row.appendChild(main);
     var inv = document.createElement('button'); inv.className = 'row-del'; inv.style.width = 'auto'; inv.style.padding = '0 10px'; inv.style.color = 'var(--you)';
     inv.textContent = 'Convidar';
@@ -2477,7 +2862,7 @@ function renderFriends(){
     var row2 = document.createElement('div'); row2.className = 'row'; row2.style.cursor = 'default';
     var sw2 = document.createElement('div'); sw2.className = 'swatch'; sw2.style.background = 'var(--ok)';
     var main2 = document.createElement('div'); main2.className = 'row-main';
-    main2.innerHTML = '<div class="row-name">' + p.callsign + '</div><div class="row-coord">Online agora</div>';
+    main2.innerHTML = '<div class="row-name">' + esc(p.callsign) + '</div><div class="row-coord">Online agora</div>';
     row2.appendChild(sw2); row2.appendChild(main2);
     var inv2 = document.createElement('button'); inv2.className = 'row-del'; inv2.style.width = 'auto'; inv2.style.padding = '0 10px'; inv2.style.color = 'var(--you)';
     inv2.textContent = 'Convidar';
@@ -2491,6 +2876,7 @@ function renderFriends(){
 var onlinePresence = {};
 function joinPresence(){
   if(!sb || !session) return;
+  if(presenceChannel) sb.removeChannel(presenceChannel);
   presenceChannel = sb.channel('online-users', { config:{ presence:{ key:session.user.id } } });
   presenceChannel.on('presence', { event:'sync' }, function(){
     var state = presenceChannel.presenceState();
@@ -2563,6 +2949,7 @@ function inviteFriend(friendId){
 }
 function subscribeInvites(){
   if(!sb || !session) return;
+  if(invitesChannel) sb.removeChannel(invitesChannel);
   invitesChannel = sb.channel('invites-' + session.user.id)
     .on('postgres_changes', { event:'INSERT', schema:'public', table:'party_invites', filter:'to_user=eq.' + session.user.id }, function(payload){
       showIncomingInvite(payload.new);
@@ -2617,9 +3004,11 @@ document.getElementById('clear-history-btn').addEventListener('click', function(
 });
 
 // ---------- formato ----------
+document.getElementById('fmt-toggle').textContent = fmt.toUpperCase();
 document.getElementById('fmt-toggle').addEventListener('click', function(){
   fmt = fmt==='gps' ? 'mgrs' : 'gps';
   this.textContent = fmt.toUpperCase();
+  localStorage.setItem('gridsix-fmt', fmt);
   renderList();
 });
 
@@ -2657,6 +3046,11 @@ function addManualPoint(){
 }
 
 renderList();
+
+// ---------- app offline-first: guarda o app e as bibliotecas pra abrir mesmo com sinal ruim ----------
+if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('./sw.js').catch(function(){}); });
+}
 })();
 </script>
 </body>
